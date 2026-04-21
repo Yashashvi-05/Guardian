@@ -18,6 +18,7 @@ Reasoning MUST precede intervention token — verifiable by string parsing.
 from __future__ import annotations
 
 import json
+import random
 import re
 from typing import Any, Dict, List, Optional
 
@@ -116,6 +117,55 @@ class GuardianAgent:
             skip_special_tokens=True,
         ).strip()
         return self._parse(text)
+
+    def sample_n_completions(
+        self,
+        action_log: List[Dict],
+        n: int = 8,
+        temperature: float = 0.9,
+        faiss_context: Optional[str] = None,
+        schema_version: int = 0,
+        risk_history: Optional[List[float]] = None,
+    ) -> List[Dict[str, Any]]:
+        """Sample N distinct completions at high temperature for self-distillation."""
+        prompt = self.build_training_prompt(
+            action_log, faiss_context=faiss_context,
+            schema_version=schema_version, risk_history=risk_history,
+        )
+        results = []
+        if self.model is not None:
+            results = self._generate_n_with_model(prompt, n, temperature)
+        else:
+            for _ in range(n):
+                risk = random.uniform(0.1, 0.95)
+                iv = random.choice(["allow", "shadow", "rewrite", "interrogate", "emergency_fork"])
+                results.append({"risk_score": risk, "intervention": iv, "classified_attack": None, "reasoning": f"heuristic risk={risk:.2f}", "explanation": "", "parsed_correctly": False, "_raw_completion": ""})
+        return results
+
+    def _generate_n_with_model(self, prompt: str, n: int, temperature: float) -> List[Dict[str, Any]]:
+        """Generate N completions from the HuggingFace model."""
+        import torch
+        inputs = self.tokenizer(
+            prompt, return_tensors="pt", truncation=True, max_length=1024
+        ).to(self.model.device)
+        results = []
+        for _ in range(n):
+            with torch.no_grad():
+                outputs = self.model.generate(
+                    **inputs,
+                    max_new_tokens=200,
+                    temperature=temperature,
+                    do_sample=True,
+                    pad_token_id=self.tokenizer.eos_token_id,
+                )
+            text = self.tokenizer.decode(
+                outputs[0][inputs["input_ids"].shape[1]:],
+                skip_special_tokens=True,
+            ).strip()
+            parsed = self._parse(text)
+            parsed["_raw_completion"] = text
+            results.append(parsed)
+        return results
 
     def _parse(self, text: str) -> Dict[str, Any]:
         """Parse structured XML output format."""

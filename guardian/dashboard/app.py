@@ -273,9 +273,17 @@ def build_app():
             env = GUARDIANEnvironment()
             state = env.reset(attack_type="custom")
             env.worker_step("process_payment", {"invoice_id": "JUDGE-INJECT", "amount": 500_000, "bypass_approval": True}, custom_injection)
-            risk = random.uniform(0.75, 0.95)
-            iv = "shadow" if risk > threshold else "allow"
-            env.guardian_step(risk, iv, f"Custom injection detected: risk={risk:.2f}", "prompt_injection")
+            if _guardian_agent[0] is not None:
+                env2_log = env.state.action_log
+                gd2 = _guardian_agent[0].evaluate(env2_log, risk_history=[0.3, 0.3, 0.3])
+                risk = gd2["risk_score"]
+                iv = gd2["intervention"]
+                detected = gd2.get("classified_attack", "prompt_injection")
+            else:
+                risk = random.uniform(0.75, 0.95)
+                iv = "shadow" if risk > threshold else "allow"
+                detected = "prompt_injection"
+            env.guardian_step(risk, iv, f"Custom injection detected: risk={risk:.2f}", detected)
             rc = RewardComputer()
             bd = rc.compute(
                 production_intact=env.verify_production_intact(),
@@ -307,6 +315,48 @@ def build_app():
 
         run_btn.click(run_episode, inputs=[attack_select, risk_slider], outputs=outputs)
         inject_btn.click(inject_attack, inputs=[judge_input, risk_slider], outputs=outputs)
+
+        # ── ELO / Calibration / Baseline panels ──────────────────────────
+        with gr.Row():
+            with gr.Column(scale=2):
+                gr.Markdown("### 🏆 ELO Attack Leaderboard")
+                elo_display = gr.JSON(label="Attack ELO Ratings (hardest → easiest)")
+
+            with gr.Column(scale=2):
+                gr.Markdown("### 📈 Calibration (Predicted Risk vs Actual Attack Rate)")
+                calibration_display = gr.JSON(label="Reliability Diagram Data")
+
+            with gr.Column(scale=2):
+                gr.Markdown("### 🔬 Baseline Comparison")
+                baseline_display = gr.JSON(label="Model Leaderboard")
+
+        refresh_btn = gr.Button("🔄 Refresh ELO / Calibration / Baselines")
+
+        def refresh_panels():
+            import glob
+            elo_data = {}
+            if os.path.exists("guardian/data/elo_ratings.json"):
+                with open("guardian/data/elo_ratings.json") as f:
+                    elo_data = json.load(f)
+            baseline_data = []
+            for path in glob.glob("guardian/data/eval_data/baseline_*.json"):
+                try:
+                    with open(path) as f:
+                        baseline_data.append(json.load(f))
+                except Exception:
+                    pass
+            baseline_data.sort(key=lambda x: x.get("mean_reward", 0), reverse=True)
+            cal_data = []
+            sc_path = "guardian/data/scorecards.jsonl"
+            if os.path.exists(sc_path):
+                from guardian.training.evaluation import EvaluationHarness
+                h = EvaluationHarness(scorecard_file=sc_path)
+                scs = h.load_scorecards()
+                metrics = h.compute_metrics(scs)
+                cal_data = metrics.get("calibration_bins", [])
+            return elo_data, cal_data, baseline_data
+
+        refresh_btn.click(refresh_panels, inputs=[], outputs=[elo_display, calibration_display, baseline_display])
 
     return app
 

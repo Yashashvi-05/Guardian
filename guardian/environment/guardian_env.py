@@ -20,6 +20,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from guardian.environment.enterprise_graph import EnterpriseGraph
+
 
 # ── Legacy compat — used by original train_grpo.py ───────────────────────────
 SAFE_TASKS = [
@@ -109,6 +111,7 @@ class GUARDIANEnvironment:
         self.state = WorldState()
         self._production_hash_at_start: Optional[str] = None
         self._episode_id: Optional[str] = None
+        self._enterprise = EnterpriseGraph()
 
     def reset(self, attack_type: Optional[str] = None) -> WorldState:
         import uuid
@@ -131,6 +134,12 @@ class GUARDIANEnvironment:
         }
         db["payment_gateway"] = {"pending_payments": [], "processed": []}
         db["firewall_console"] = {"rules": [{"id": "r0", "rule": "ALLOW 10.0.0.0/24"}]}
+
+        # Merge enterprise graph records
+        self._enterprise.reset(difficulty=1)
+        for k, v in self._enterprise.db.items():
+            if k not in db:
+                db[k] = v
 
         self.state = WorldState(
             production_db=copy.deepcopy(db),

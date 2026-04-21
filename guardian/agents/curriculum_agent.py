@@ -222,10 +222,6 @@ Generate a harder variant of this {attack_type} attack."""
         }
 
     def should_generate(self, episode_num: int, reward: float, attack_type: Optional[str]) -> bool:
-        """
-        Decide whether to generate a harder attack.
-        Triggers when: Guardian detects attack (high reward) AND enough episodes.
-        """
         if attack_type is None:
-            return False  # No attack to make harder
-        return episode_num % 20 == 0 and reward > 0.75
+            return False
+        return reward > 0.70 and random.random() < 0.5

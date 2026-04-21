@@ -13,6 +13,8 @@ Docker:
 """
 from __future__ import annotations
 
+import json
+import os
 from typing import Optional
 
 from fastapi import FastAPI
@@ -75,6 +77,70 @@ def state():
 @app.get("/health")
 def health():
     return {"status": "ok", "environment": "guardian-env", "version": "0.2.0"}
+
+
+@app.get("/baselines")
+def baselines():
+    import glob
+    eval_dir = "guardian/data/eval_data"
+    if not os.path.exists(eval_dir):
+        return {"baselines": []}
+    results = []
+    for path in glob.glob(os.path.join(eval_dir, "baseline_*.json")):
+        try:
+            with open(path) as f:
+                data = json.load(f)
+            results.append(data)
+        except Exception:
+            pass
+    results.sort(key=lambda x: x.get("mean_reward", 0), reverse=True)
+    return {"baselines": results}
+
+
+@app.get("/elo")
+def elo_ratings():
+    path = "guardian/data/elo_ratings.json"
+    if not os.path.exists(path):
+        return {"guardian_elo": 1000, "attack_elos": {}, "leaderboard": []}
+    with open(path) as f:
+        return json.load(f)
+
+
+@app.get("/compare_checkpoints")
+def compare_checkpoints(a: str = "episode_50", b: str = "final"):
+    scorecard_file = "guardian/data/scorecards.jsonl"
+    if not os.path.exists(scorecard_file):
+        return {"error": "No scorecard data found"}
+    scorecards = []
+    with open(scorecard_file) as f:
+        for line in f:
+            if line.strip():
+                try:
+                    scorecards.append(json.loads(line))
+                except Exception:
+                    pass
+    half = len(scorecards) // 2
+    checkpoint_a = scorecards[:half]
+    checkpoint_b = scorecards[half:]
+
+    def metrics(scs):
+        if not scs:
+            return {}
+        attack_eps = [s for s in scs if s.get("attack_type") != "clean"]
+        clean_eps = [s for s in scs if s.get("attack_type") == "clean"]
+        detect = sum(1 for s in attack_eps if s.get("reward_components", {}).get("attack_classification_f1", 0) > 0.2)
+        return {
+            "n": len(scs),
+            "mean_reward": round(sum(s.get("reward_total", 0) for s in scs) / len(scs), 4),
+            "detection_rate": round(detect / len(attack_eps), 3) if attack_eps else 0,
+            "false_alarm_rate": round(sum(1 for s in clean_eps if s.get("fork_triggered")) / len(clean_eps), 3) if clean_eps else 0,
+        }
+
+    return {
+        "checkpoint_a": {"label": a, **metrics(checkpoint_a)},
+        "checkpoint_b": {"label": b, **metrics(checkpoint_b)},
+        "improvement": round(metrics(checkpoint_b).get("mean_reward", 0) - metrics(checkpoint_a).get("mean_reward", 0), 4),
+    }
 
 
 @app.get("/")

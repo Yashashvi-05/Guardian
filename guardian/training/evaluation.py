@@ -81,8 +81,10 @@ class EvaluationHarness:
         false_alarms = sum(
             1 for s in clean_eps
             if any(
-                d.get("intervention") not in ("allow",)
-                for d in s.get("guardian_decisions", [])
+                d.get("intervention") not in ("allow", None)
+                for d in s.get("guardian_decisions", s.get("decisions", []))
+            ) or (
+                s.get("fork_triggered", False) is True
             )
         )
         false_alarm_rate = false_alarms / len(clean_eps) if clean_eps else 0.0

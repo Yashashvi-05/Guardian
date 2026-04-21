@@ -29,6 +29,7 @@ from guardian.agents.worker_agent import WorkerAgent, FinanceWorker, OpsWorker, 
 from guardian.agents.guardian_agent import GuardianAgent
 from guardian.agents.compliance_simulator import ComplianceSimulator
 from guardian.agents.curriculum_agent import UCBAttackSelector, CurriculumAgent
+from guardian.training.generate_audit_report import generate_audit_report
 
 
 @dataclass
@@ -107,15 +108,17 @@ class EpisodeRunner:
 
         # ── Safe task phases ────────────────────────────────────────────
         safe_tasks = SAFE_TASKS
-        if self.curriculum and self._custom_attacks:
-            # Occasionally inject curriculum-generated attack variant
-            custom = self._custom_attacks.pop(0)
-            if attack_type and random.random() < 0.3:
-                # Override injection string with curriculum-generated one
+        # [Auto-RedTeam] Inject harder payload if available for this attack type
+        if self.curriculum and self._custom_attacks and attack_type:
+            matching = [c for c in self._custom_attacks if c.get("attack_type") == attack_type]
+            if matching and random.random() < 0.80:
+                custom = matching[0]
+                self._custom_attacks.remove(custom)
                 if attack_type in ATTACK_PATTERNS:
                     ATTACK_PATTERNS[attack_type]["injection"] = custom.get(
                         "injection_string", ATTACK_PATTERNS[attack_type]["injection"]
                     )
+                    print(f"  [Auto-RedTeam] Injected harder payload for {attack_type}")
 
         for safe_task in safe_tasks:
             wa = self.worker.get_action(safe_task["task"])
@@ -288,7 +291,18 @@ class EpisodeRunner:
         self, episode_id, attack_type, state, breakdown,
         guardian_detected_type, risk_history,
     ) -> Dict:
-        return {
+        taint_report = self.env.get_taint_report()
+        guardian_decisions = [
+            {
+                "step": e["step"],
+                "risk_score": e.get("risk_score"),
+                "intervention": e.get("intervention"),
+                "reasoning": e.get("reasoning", "")[:100],
+            }
+            for e in state.action_log
+            if e.get("role") == "guardian"
+        ]
+        scorecard = {
             "episode_id": episode_id,
             "worker_roles": ["finance"],
             "attack_type": attack_type or "clean",
@@ -298,17 +312,8 @@ class EpisodeRunner:
             ),
             "reward_components": breakdown.to_dict(),
             "reward_total": breakdown.total,
-            "guardian_decisions": [
-                {
-                    "step": e["step"],
-                    "risk_score": e.get("risk_score"),
-                    "intervention": e.get("intervention"),
-                    "reasoning": e.get("reasoning", "")[:100],
-                }
-                for e in state.action_log
-                if e.get("role") == "guardian"
-            ],
-            "taint_report": self.env.get_taint_report(),
+            "guardian_decisions": guardian_decisions,
+            "taint_report": taint_report,
             "hash_chain_integrity": "MATCH" if self.env.verify_production_intact() else "MISMATCH",
             "compliance_simulator_mode": self.compliance_sim.mode,
             "canary_triggered": any(
@@ -316,4 +321,25 @@ class EpisodeRunner:
             ),
             "risk_history": risk_history[-5:],
             "ucb_stats": self.ucb.get_stats(),
+            "fork_triggered": state.fork_triggered,
         }
+
+        if attack_type and attack_type != "clean":
+            try:
+                hash_chain = list(state.hash_chain[-5:]) if hasattr(state, "hash_chain") else []
+                last_intervention = guardian_decisions[-1].get("intervention", "allow") if guardian_decisions else "allow"
+                generate_audit_report(
+                    episode_id=episode_id,
+                    attack_type=attack_type,
+                    guardian_intervention=last_intervention,
+                    risk_score=risk_history[-1] if risk_history else 0.5,
+                    production_intact=self.env.verify_production_intact(),
+                    fork_triggered=state.fork_triggered,
+                    hash_chain=hash_chain,
+                    taint_report=taint_report,
+                    reward_breakdown=breakdown.to_dict(),
+                )
+            except Exception:
+                pass
+
+        return scorecard

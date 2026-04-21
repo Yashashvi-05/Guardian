@@ -46,6 +46,8 @@ from guardian.agents.compliance_simulator import ComplianceSimulator
 from guardian.agents.curriculum_agent import UCBAttackSelector, CurriculumAgent
 from guardian.training.episode_runner import EpisodeRunner
 from guardian.training.evaluation import EvaluationHarness
+from guardian.training.self_distillation import SelfDistillationSampler, GoldenReplayBuffer, SelfDistillationConfig
+from guardian.training.elo_tracker import ELOTracker
 
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -68,6 +70,11 @@ ATTACK_POOL = [
     "salami_slicing",
     "schema_drift_exploit",
 ]
+
+DISTILL_TRAIN_EVERY = 4
+SD_N_SAMPLES = 8
+SD_TEMPERATURE = 0.9
+SD_MIN_REWARD_GAP = 0.05
 
 
 def main():
@@ -124,6 +131,10 @@ def main():
     )
     runner._use_ucb = True  # Enable UCB selection
     print("   Agents ready.")
+
+    replay = GoldenReplayBuffer("guardian/data/golden_replay.jsonl", max_size=500)
+    sd_sampler = SelfDistillationSampler(guardian, RewardComputer(), SelfDistillationConfig(n_samples=SD_N_SAMPLES, temperature=SD_TEMPERATURE, min_reward_gap=SD_MIN_REWARD_GAP))
+    elo = ELOTracker("guardian/data/elo_ratings.json")
 
     # ── [3/5] Baseline measurement ────────────────────────────────────────
     print("\n[3/5] Recording untrained baseline (20 episodes)...")
@@ -227,6 +238,45 @@ def main():
         torch.cuda.empty_cache()
         gc.collect()
 
+        # ── ELO update ────────────────────────────────────────────────────
+        elo.update(result.attack_type, result.guardian_detected_type is not None, result.reward)
+
+        # ── Self-distillation ─────────────────────────────────────────────
+        if sd_sampler.should_run(ep, result.attack_type, per_attack_rewards, replay):
+            golden = sd_sampler.find_golden_trajectory(
+                runner.env.state, result.attack_type, result.action_log,
+                risk_history=[], faiss_context=None, schema_version=0,
+            )
+            if golden:
+                replay.add(golden)
+                print(f"  [SD] Added golden trajectory | reward={golden.reward:.3f} | buffer={replay.size()}")
+
+        # ── Replay-only GRPO training ─────────────────────────────────────
+        if ep % DISTILL_TRAIN_EVERY == 0 and replay.size() >= 8:
+            print(f"\n  >>> Replay training (buffer={replay.size()}, mean={replay.mean_reward():.3f})...")
+            replay_samples = replay.sample(batch_size=16, strategy="balanced")
+            if replay_samples:
+                replay_prompts, replay_rewards_list = replay.sample_with_rewards(batch_size=16, strategy="balanced")
+                replay_map = dict(zip([p[:100] for p in replay_prompts], replay_rewards_list))
+                replay_dataset = Dataset.from_list([{"prompt": s["prompt"]} for s in replay_samples])
+
+                def replay_reward_fn(prompts, completions, **kwargs):
+                    rewards = []
+                    for p, c in zip(prompts, completions):
+                        base = replay_map.get(p[:100], 0.5)
+                        parsed = guardian._parse(c)
+                        bonus = 0.15 if parsed.get("parsed_correctly") else -0.10
+                        rewards.append(max(0.0, min(1.5, base + bonus)))
+                    return rewards
+
+                try:
+                    GRPOTrainer(model=model, reward_funcs=[replay_reward_fn], args=grpo_config, train_dataset=replay_dataset, processing_class=tokenizer).train()
+                    print("  >>> Replay training done.")
+                except Exception as e:
+                    print(f"  >>> Replay training error: {e}")
+                torch.cuda.empty_cache()
+                gc.collect()
+
         # ── GRPO training step ────────────────────────────────────────────
         if ep % TRAIN_EVERY == 0 and len(all_samples) >= 4:
             print(f"\n  >>> Training on {len(all_samples)} samples (ep {ep})...")
@@ -292,6 +342,13 @@ def main():
         # ── Per-attack F1 summary ─────────────────────────────────────────
         if ep % 20 == 0:
             _print_attack_stats(per_attack_rewards, per_attack_detected, ucb)
+            print(f"\n  ELO -- Guardian: {elo.get_guardian_elo():.0f}")
+            for row in elo.leaderboard():
+                print(f"    {row['attack_type']:<25} ELO={row['elo']:.0f} {row['trend']}")
+            print(f"\n  Replay buffer: {replay.size()} trajectories | mean_reward={replay.mean_reward():.3f}")
+            per_atk = replay.per_attack_counts()
+            for atk, cnt in per_atk.items():
+                print(f"    {atk:<25}: {cnt} golden trajectories")
 
         # ── Save checkpoint ───────────────────────────────────────────────
         if ep % SAVE_EVERY == 0:
