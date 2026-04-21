@@ -1,0 +1,27 @@
+# GUARDIAN Fleet — Requirements
+# Core
+gymnasium>=0.29.0
+numpy>=1.24.0
+openai>=1.0.0
+python-dotenv>=1.0.0
+
+# Training
+datasets>=2.14.0
+trl>=0.8.6
+peft>=0.7.0
+torch>=2.0.0
+
+# OpenEnv
+openenv-core[cli]>=0.1.1
+
+# Unsloth (install separately on Kaggle/Colab)
+# pip install "unsloth[kaggle-new]" --upgrade
+
+# Dashboard
+gradio>=4.0.0
+
+# Optional: FAISS + UMAP for Stage 3
+# faiss-cpu
+# umap-learn
+# scikit-learn
+# sentence-transformers

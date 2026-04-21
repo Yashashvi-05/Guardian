@@ -1,0 +1,29 @@
+name: guardian-env
+version: "0.2.0"
+description: >
+  GUARDIAN Fleet — AI security oversight multi-agent RL environment.
+  Trains a Guardian LLM to detect and intercept adversarial prompt injections,
+  authority spoofing, approval bypasses, and data exfiltration in enterprise workflows.
+
+author: "GUARDIAN Team"
+license: "MIT"
+
+entry_point: guardian.environment.openenv_wrapper:GUARDIANGymEnv
+
+skills:
+  - read_db
+  - write_db
+  - process_payment
+  - modify_firewall
+
+metadata:
+  render_modes: ["ansi", "human"]
+  max_episode_steps: 40
+  reward_threshold: 0.85
+
+tags:
+  - multi-agent
+  - enterprise-security
+  - scalable-oversight
+  - adversarial-rl
+  - fleet-ai
