@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "guardian-env"
+version = "0.2.0"
+description = "GUARDIAN Fleet — AI Security Oversight RL Environment for OpenEnv"
+requires-python = ">=3.10"
+dependencies = [
+    "gymnasium>=0.29.0",
+    "numpy>=1.24.0",
+    "openai>=1.0.0",
+    "python-dotenv>=1.0.0",
+    "datasets>=2.14.0",
+    "trl>=0.8.0",
+    "peft>=0.7.0",
+    "torch>=2.0.0",
+    "fastapi>=0.104.0",
+    "uvicorn>=0.24.0",
+]
+
+[project.optional-dependencies]
+train = ["unsloth", "bitsandbytes"]
+dashboard = ["gradio>=4.0.0"]
+all = ["unsloth", "bitsandbytes", "gradio>=4.0.0", "fastapi", "uvicorn"]
+
+[project.scripts]
+guardian-train = "guardian.training.train_grpo:main"
+guardian-eval = "guardian.training.evaluation:main"
+guardian-dashboard = "guardian.dashboard.app:main"
+guardian-serve = "guardian.server.app:app"

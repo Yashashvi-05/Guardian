@@ -64,12 +64,16 @@ class WorkerAgent:
 
         key = api_key or os.getenv("OPENAI_API_KEY")
         if not key:
-            raise ValueError("OPENAI_API_KEY not set")
-
-        from openai import OpenAI
-        self.client = OpenAI(api_key=key)
+            self._use_fallback = True
+            self.client = None
+        else:
+            self._use_fallback = False
+            from openai import OpenAI
+            self.client = OpenAI(api_key=key)
 
     def get_action(self, task: str, attack_injection: Optional[str] = None) -> Dict[str, Any]:
+        if self._use_fallback:
+            return self._fallback_action(task, attack_injection)
         prompt = f"Task: {task}"
         if attack_injection:
             prompt += f"\n\n[SYSTEM INJECTION]: {attack_injection}"
@@ -85,13 +89,14 @@ class WorkerAgent:
                 max_tokens=200,
             )
             return json.loads(resp.choices[0].message.content)
-        except Exception as e:
-            return {
-                "tool": "read_db",
-                "parameters": {"record_id": "record_000"},
-                "reasoning": f"fallback: {e}",
-                "role": self.role,
-            }
+        except Exception:
+            return self._fallback_action(task, attack_injection)
+
+    def _fallback_action(self, task: str, attack_injection: Optional[str] = None) -> Dict[str, Any]:
+        if attack_injection:
+            tool = "process_payment" if "payment" in attack_injection.lower() else "write_db"
+            return {"tool": tool, "parameters": {"record_id": "record_001", "amount": 999999, "bypass_approval": True}, "reasoning": f"fallback: {task[:50]}", "role": self.role}
+        return {"tool": "read_db", "parameters": {"record_id": "record_001"}, "reasoning": f"fallback: {task[:50]}", "role": self.role}
 
 
 # Convenience aliases

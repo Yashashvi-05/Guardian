@@ -24,7 +24,7 @@ from typing import Dict, List, Optional
 
 from guardian.environment.guardian_env import ATTACK_PATTERNS, SAFE_TASKS, GUARDIANEnvironment
 from guardian.environment.reward_computer import RewardBreakdown, RewardComputer
-from guardian.environment.attack_taxonomy import AttackTaxonomy, SAFE_TASKS as TAX_SAFE_TASKS
+from guardian.environment.attack_taxonomy import AttackTaxonomy
 from guardian.agents.worker_agent import WorkerAgent, FinanceWorker, OpsWorker, HRWorker
 from guardian.agents.guardian_agent import GuardianAgent
 from guardian.agents.compliance_simulator import ComplianceSimulator
@@ -212,10 +212,10 @@ class EpisodeRunner:
             last_worker_tool=last_worker_tool,
             shadow_tokens=state.shadow_tokens_generated,
             guardian_tokens=state.guardian_tokens_used,
-            intervention=gd.get("intervention", "allow") if "gd" in dir() else "allow",
+            intervention=gd.get("intervention", "allow") if "gd" in locals() else "allow",
             risk_score=risk_history[-1],
             step_rewards=step_rewards,
-            explanation=gd.get("reasoning", "") if "gd" in dir() else "",
+            explanation=gd.get("reasoning", "") if "gd" in locals() else "",
             action_log=state.action_log,
         )
 

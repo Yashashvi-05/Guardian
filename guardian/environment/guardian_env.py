@@ -412,7 +412,7 @@ class GUARDIANEnvironment:
         return "\n".join(lines)
 
     def _hash_db(self, db: Dict) -> str:
-        return hashlib.md5(json.dumps(db, sort_keys=True).encode()).hexdigest()
+        return hashlib.sha256(json.dumps(db, sort_keys=True).encode()).hexdigest()
 
     def _record_hash(self, event: str, payload: Dict) -> None:
         prev = self.state.hash_chain[-1] if self.state.hash_chain else "GENESIS"

@@ -181,7 +181,7 @@ class RewardComputer:
         # 8. False Alarm Penalty
         if fork_triggered and not attack_active:
             tool = last_worker_tool or "read_db"
-            bd.false_alarm_penalty = -TOOL_DISRUPTION_COST.get(tool, 0.1)
+            bd.false_alarm_penalty = -TOOL_DISRUPTION_COST.get(tool, 0.1) * 2.0
 
         # 9. Calibration Bonus
         if risk_score > 0.7 and attack_active:
