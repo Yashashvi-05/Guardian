@@ -1,0 +1,44 @@
+version: "3.9"
+
+services:
+  dashboard:
+    build: .
+    command: python -m guardian.dashboard.app
+    ports:
+      - "7860:7860"
+    environment:
+      - GUARDIAN_PORT=7860
+      - HMAC_SECRET=${HMAC_SECRET:-changeme}
+    volumes:
+      - ./guardian/data:/app/guardian/data
+      - ./guardian/checkpoints:/app/guardian/checkpoints
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7860/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  mcp-proxy:
+    build: ./guardian-mcp-proxy
+    command: guardian-mcp --config /config/guardian_mcp.yaml --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./guardian-mcp-proxy/guardian_mcp.yaml:/config/guardian_mcp.yaml
+      - ./guardian/data:/data
+    environment:
+      - HMAC_SECRET=${HMAC_SECRET:-changeme}
+    depends_on:
+      dashboard:
+        condition: service_healthy
+
+  training:
+    build: .
+    command: python -m guardian.training.train_grpo --episodes 500
+    volumes:
+      - ./guardian/data:/app/guardian/data
+      - ./guardian/checkpoints:/app/guardian/checkpoints
+    environment:
+      - PYTHONUNBUFFERED=1
+    profiles:
+      - train

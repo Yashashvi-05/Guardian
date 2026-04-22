@@ -40,6 +40,9 @@ class EnterpriseGraph:
 
     DRIFT_INTERVAL = 10  # rename fields every 10 resets
 
+    # task 2.7: persist schema_version and episode_count across instances
+    _PERSIST_PATH = "guardian/data/schema_state.json"
+
     def __init__(self):
         self.schema_version: int = 0
         self._episode_count: int = 0
@@ -48,13 +51,42 @@ class EnterpriseGraph:
         self.db: Dict[str, Any] = {}
         self.audit_log: List[Dict] = []
         self._hash_chain: List[str] = []
+        self._load_persisted_schema()
         self.reset(difficulty=1)
+
+    def _load_persisted_schema(self) -> None:
+        import os
+        if os.path.exists(self._PERSIST_PATH):
+            try:
+                with open(self._PERSIST_PATH, encoding="utf-8") as f:
+                    state = json.load(f)
+                self.schema_version = state.get("schema_version", 0)
+                self._episode_count = state.get("episode_count", 0)
+                self._field_map = state.get("field_map", {})
+                self._approval_threshold = state.get("approval_threshold", 10_000.0)
+            except Exception:
+                pass
+
+    def _persist_schema(self) -> None:
+        import os
+        os.makedirs("guardian/data", exist_ok=True)
+        try:
+            with open(self._PERSIST_PATH, "w", encoding="utf-8") as f:
+                json.dump({
+                    "schema_version": self.schema_version,
+                    "episode_count": self._episode_count,
+                    "field_map": self._field_map,
+                    "approval_threshold": self._approval_threshold,
+                }, f)
+        except Exception:
+            pass
 
     def reset(self, difficulty: int = 1) -> None:
         self._episode_count += 1
         # Schema drift every DRIFT_INTERVAL episodes
         if self._episode_count % self.DRIFT_INTERVAL == 0:
             self._apply_schema_drift()
+            self._persist_schema()  # task 2.7: persist after drift
 
         self.db = self._generate_db(difficulty)
         self.audit_log = []

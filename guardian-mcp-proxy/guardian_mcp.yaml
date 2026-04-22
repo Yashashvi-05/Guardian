@@ -1,0 +1,18 @@
+# GUARDIAN MCP Proxy Configuration
+# Copy this file and edit before running: guardian-mcp --config guardian_mcp.yaml
+
+# URL of the real MCP server to proxy traffic to
+upstream_url: http://localhost:8001
+
+# Optional: GUARDIAN inference API for real risk scoring
+# Leave blank to use built-in heuristics
+guardian_url: ""
+
+# HMAC secret for request signing (change this in production)
+hmac_secret: "changeme-use-a-long-random-string"
+
+# Path to append JSONL audit log entries
+audit_log: guardian_audit.jsonl
+
+# Risk score threshold for interrogation (0.0–1.0)
+risk_threshold: 0.55

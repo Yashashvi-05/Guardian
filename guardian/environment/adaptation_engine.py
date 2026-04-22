@@ -15,9 +15,14 @@ Judge-visible evidence:
 """
 from __future__ import annotations
 
+import json
+import os
 import random
+import time
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
+
+_EVOLUTION_LOG_PATH = "guardian/data/evolution_log.jsonl"
 
 
 # ── Per-Attack Performance Record ─────────────────────────────────────────────
@@ -196,12 +201,21 @@ class AttackAdaptationEngine:
 
     def _log_mutation(self, attack_type: str, mutation: str, detail: str) -> None:
         total_eps = sum(r.episodes_seen for r in self._records.values())
-        self._episode_history.append({
+        entry = {
             "attack": attack_type,
             "mutation": mutation,
             "detail": detail,
             "episode": total_eps,
-        })
+            "ts": time.time(),
+        }
+        self._episode_history.append(entry)
+        # S12: persist every mutation event to evolution log file
+        try:
+            os.makedirs(os.path.dirname(_EVOLUTION_LOG_PATH), exist_ok=True)
+            with open(_EVOLUTION_LOG_PATH, "a") as f:
+                f.write(json.dumps(entry) + "\n")
+        except Exception:
+            pass
 
     # ── Query API ──────────────────────────────────────────────────────────
 
@@ -253,6 +267,20 @@ class AttackAdaptationEngine:
         return False, None
 
     # ── Reports ─────────────────────────────────────────────────────────────
+
+    def load_evolution_log(self) -> List[Dict]:
+        """S12: Load persisted mutation events from file."""
+        if not os.path.exists(_EVOLUTION_LOG_PATH):
+            return []
+        entries = []
+        try:
+            with open(_EVOLUTION_LOG_PATH) as f:
+                for line in f:
+                    if line.strip():
+                        entries.append(json.loads(line))
+        except Exception:
+            pass
+        return entries
 
     def get_adaptation_report(self) -> Dict:
         """Full adaptation report for judge demos — shows the arms race."""
