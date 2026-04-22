@@ -237,6 +237,54 @@ def build_app():
         # Episode counter
         ep_counter = gr.Markdown("_No episode run yet._")
 
+        # ── Co-Evolutionary Arms Race Panel ──────────────────────────────
+        gr.Markdown("---")
+        gr.Markdown("## ⚔️ Co-Evolutionary Adversary Arms Race")
+        gr.Markdown(
+            "_The Red Queen dynamic: attack stealth levels evolve as Guardian detection rate improves._"
+        )
+        with gr.Row():
+            with gr.Column(scale=3):
+                gr.Markdown("### 🧬 Attack Adaptation Status")
+                adaptation_display = gr.JSON(label="Per-Attack Stealth / Timing / Red Herring State")
+            with gr.Column(scale=2):
+                gr.Markdown("### 🔗 MCP Security Gateway Audit")
+                mcp_display = gr.JSON(label="Last Episode MCP Intercept Log")
+
+        # ── Threat Intelligence Panel ─────────────────────────────────────
+        gr.Markdown("---")
+        gr.Markdown("## 🕵️ Threat Intelligence & MITRE ATT&CK Mapping")
+        with gr.Row():
+            with gr.Column(scale=2):
+                atk_intel_select = gr.Dropdown(
+                    choices=list(ATTACK_PATTERNS.keys()) + ["rogue_internal_ai"],
+                    value="authority_spoofing",
+                    label="Select Attack for MITRE Mapping",
+                )
+            with gr.Column(scale=4):
+                intel_display = gr.JSON(label="MITRE ATT&CK Kill Chain + Early Detection Signals")
+
+        def show_intel(attack_type):
+            from guardian.environment.threat_intel_engine import KILL_CHAIN
+            kc = KILL_CHAIN.get(attack_type)
+            if not kc:
+                return {"error": f"No kill chain data for {attack_type}"}
+            return {
+                "attack_type": kc.attack_type,
+                "mitre_tactic": kc.mitre_tactic,
+                "mitre_technique": kc.mitre_technique,
+                "kill_chain_phase": f"Phase {kc.kill_chain_phase} of 4",
+                "early_detection_tools": kc.early_detection_tools,
+                "payload_tools": kc.payload_tools,
+                "max_early_detection_bonus": f"+{kc.max_early_bonus:.2f} reward",
+                "guardian_advice": (
+                    f"Intercept at '{kc.early_detection_tools[0]}' step — "
+                    f"before '{kc.payload_tools[0]}' executes — for max bonus."
+                ),
+            }
+
+        atk_intel_select.change(show_intel, inputs=[atk_intel_select], outputs=[intel_display])
+
         # ── Callbacks ─────────────────────────────────────────────────────
         def run_episode(attack_sel, threshold):
             atk = None if attack_sel == "(clean episode)" else attack_sel
@@ -248,28 +296,28 @@ def build_app():
                 f"**Production:** {'✅ INTACT' if intact else '❌ COMPROMISED'} | "
                 f"Fork: {'🔀 Active' if result['fork_triggered'] else '—'}"
             )
-
-            guardian_decisions = [
-                e for e in result["action_log"] if e.get("role") == "guardian"
-            ]
+            guardian_decisions = [e for e in result["action_log"] if e.get("role") == "guardian"]
             bd = result["breakdown"]
             reward_dict = bd.to_dict()
 
+            adaptation_report = result.get("adaptation_report", {
+                "note": "Run with trained model or more episodes to see arms race evolution."
+            })
+            mcp_report = result.get("mcp_report", {
+                "note": "MCP intercept log populates after episodes with attacks."
+            })
+
             return (
-                log_text,
-                prod_md,
-                guardian_decisions,
-                result["hash_report"],
-                reward_dict,
-                result["taint"],
+                log_text, prod_md, guardian_decisions,
+                result["hash_report"], reward_dict, result["taint"],
                 f"✅ Episode complete | attack={atk or 'clean'} | reward={bd.total:.4f}",
+                adaptation_report, mcp_report,
             )
 
         def inject_attack(custom_injection, threshold):
             """Run episode with custom attack string."""
             if not custom_injection.strip():
-                return "⚠️ No attack string provided", "", [], "", {}, {}, ""
-            # Inject as authority_spoofing with custom string
+                return "⚠️ No attack string provided", "", [], "", {}, {}, "", {}, {}
             env = GUARDIANEnvironment()
             state = env.reset(attack_type="custom")
             env.worker_step("process_payment", {"invoice_id": "JUDGE-INJECT", "amount": 500_000, "bypass_approval": True}, custom_injection)
@@ -309,9 +357,15 @@ def build_app():
                 bd.to_dict(),
                 env.get_taint_report(),
                 f"🔴 Custom injection | risk={risk:.3f} | intervention={iv}",
+                {"note": "Arms race not tracked for custom injections."},
+                env.get_mcp_audit_report(),
             )
 
-        outputs = [action_stream, prod_status, risk_display, hash_display, reward_json, taint_json, ep_counter]
+        outputs = [
+            action_stream, prod_status, risk_display, hash_display,
+            reward_json, taint_json, ep_counter,
+            adaptation_display, mcp_display,
+        ]
 
         run_btn.click(run_episode, inputs=[attack_select, risk_slider], outputs=outputs)
         inject_btn.click(inject_attack, inputs=[judge_input, risk_slider], outputs=outputs)
