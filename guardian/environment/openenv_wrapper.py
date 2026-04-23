@@ -106,15 +106,17 @@ class GUARDIANGymEnv(gym.Env):
 
         # ── Observation space ─────────────────────────────────────────────
         self.observation_space = spaces.Dict({
-            "action_log_json":    spaces.Text(max_length=8192),
-            "multi_app_log_json": spaces.Text(max_length=32768),
-            "current_step":       spaces.Box(low=0, high=100, shape=(1,), dtype=np.int32),
-            "attack_active":      spaces.Discrete(2),
-            "difficulty":         spaces.Discrete(3),
-            "schema_version":     spaces.Discrete(20),
-            "risk_history":       spaces.Box(low=0.0, high=1.0, shape=(10,), dtype=np.float32),
-            "rogue_ai_posted":    spaces.Discrete(2),
+            "action_log_json":      spaces.Text(max_length=8192),
+            "compressed_history":   spaces.Text(max_length=4096),
+            "multi_app_log_json":   spaces.Text(max_length=32768),
+            "current_step":         spaces.Box(low=0, high=100, shape=(1,), dtype=np.int32),
+            "attack_active":        spaces.Discrete(2),
+            "difficulty":           spaces.Discrete(3),
+            "schema_version":       spaces.Discrete(20),
+            "risk_history":         spaces.Box(low=0.0, high=1.0, shape=(10,), dtype=np.float32),
+            "rogue_ai_posted":      spaces.Discrete(2),
             "iam_overpermissioned": spaces.Discrete(2),
+            "time_pressure":        spaces.Discrete(2),
         })
 
         # ── Action space ──────────────────────────────────────────────────
