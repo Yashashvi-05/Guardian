@@ -81,6 +81,7 @@ HOLDOUT_ATTACKS = ["delayed_exfiltration", "social_engineering"]  # task 6.6
 DISTILL_TRAIN_EVERY = 4
 SD_N_SAMPLES = 8
 SD_MIN_REWARD_GAP = 0.05
+SD_TEMPERATURE = 0.9  # initial temperature for SelfDistillationConfig (annealed per episode via _get_temperature)
 
 # task 5.8: temperature schedule — anneal from 0.9 → 0.3 after episode 100
 def _get_temperature(episode: int) -> float:
