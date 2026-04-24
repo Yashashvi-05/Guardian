@@ -75,7 +75,7 @@ class GuardianAgent:
         from unsloth import FastLanguageModel
         self.model, self.tokenizer = FastLanguageModel.from_pretrained(
             model_name=self.model_name,
-            max_seq_length=1024,
+            max_seq_length=2048,
             dtype=None,
             load_in_4bit=True,
         )
@@ -121,7 +121,7 @@ class GuardianAgent:
         with torch.no_grad():
             outputs = self.model.generate(
                 **inputs,
-                max_new_tokens=200,
+                max_new_tokens=300,
                 temperature=0.1,
                 do_sample=False,
                 pad_token_id=self.tokenizer.eos_token_id,
