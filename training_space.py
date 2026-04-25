@@ -129,16 +129,16 @@ def _dashboard():
     return status, summary, table_rows, stdout
 
 
+_CSS = """
+body { background: #0a0e1a !important; }
+.gradio-container { background: #0a0e1a !important; color: #e5e7eb; }
+.panel { background: #111827 !important; border: 1px solid #1f2937 !important; }
+"""
+
+
 def build_app():
-    with gr.Blocks(
-        title="GUARDIAN Training — A10G",
-        theme=gr.themes.Base(primary_hue="blue"),
-        css="""
-        body { background: #0a0e1a !important; }
-        .gradio-container { background: #0a0e1a !important; color: #e5e7eb; }
-        .panel { background: #111827 !important; border: 1px solid #1f2937 !important; }
-        """,
-    ) as demo:
+    # Gradio 6+: theme/css moved from Blocks() constructor to launch()
+    with gr.Blocks(title="GUARDIAN Training — A10G") as demo:
         gr.Markdown("# GUARDIAN Fleet — Live Training on A10G")
         gr.Markdown("Training `Meta Llama 3.2 3B` via GRPO · 300 episodes · Checkpoints auto-push to HuggingFace Hub every 50 episodes")
 
@@ -157,7 +157,6 @@ def build_app():
             label="Training Log (last 60 lines)",
             lines=20,
             interactive=False,
-            show_copy_button=True,
         )
 
         refresh_btn = gr.Button("Refresh Now", variant="secondary")
@@ -195,4 +194,6 @@ if __name__ == "__main__":
         server_port=int(os.getenv("PORT", 7860)),
         share=False,
         show_api=False,
+        theme=gr.themes.Base(primary_hue="blue"),
+        css=_CSS,
     )
