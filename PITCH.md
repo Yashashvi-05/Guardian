@@ -109,7 +109,7 @@ Who has an environment where AI agents touch money, data, or IAM?"
 > SIEM rules fire on known signatures. GUARDIAN fires on behavioral patterns learned from RL — it generalizes to novel variants it has never seen, including compound attacks and delayed exfiltration that span multiple sessions. The co-evolutionary Red Queen training loop means the Guardian improves specifically against the attack patterns it struggles with (UCB exploration).
 
 **Q: What's the false alarm rate in production?**
-> In our trained phase (episodes 66–100): 42.9% false alarm rate. This is honest — we're reporting real heuristic numbers, not tuned synthetic results. The full GRPO fine-tuning of Qwen2.5-7B with the calibration bonus component is designed to drive this below 10% with a real language model. The heuristic demonstration shows the environment and reward structure work; the model training is the next step.
+> In our trained phase (episodes 66–100): 42.9% false alarm rate. This is honest — we're reporting real heuristic numbers, not tuned synthetic results. The full GRPO fine-tuning of Llama-3.2-3B with the calibration bonus component is designed to drive this below 10% with a real language model. The heuristic demonstration shows the environment and reward structure work; the model training is the next step.
 
 **Q: Could a sophisticated attacker evade GUARDIAN?**
 > Yes — that's the point of the co-evolutionary training loop. The attacker in our simulation mutates every time GUARDIAN detects it (Red Queen / ELO-based adaptation). Rogue internal AI F1 is 85.7% — that's our strongest scenario. Authority spoofing is currently 50% — the adversary we train against next. We're reporting real numbers, not cherry-picked ones.

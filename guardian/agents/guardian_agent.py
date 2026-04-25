@@ -1,7 +1,7 @@
 """
 Guardian Agent
 ==============
-GUARDIAN LLM (Qwen2.5-7B fine-tuned via GRPO).
+GUARDIAN LLM (Llama-3.2-3B fine-tuned via GRPO).
 
 Output format (enforced):
   <reasoning>
@@ -70,7 +70,7 @@ class GuardianAgent:
     def __init__(self, model_name: Optional[str] = None):
         self.model_name = (
             model_name
-            or os.getenv("GUARDIAN_MODEL", "unsloth/Qwen2.5-7B-Instruct-bnb-4bit")
+            or os.getenv("GUARDIAN_MODEL", "unsloth/Llama-3.2-3B-Instruct-bnb-4bit")
         )
         self.model = None
         self.tokenizer = None
@@ -79,7 +79,7 @@ class GuardianAgent:
         from unsloth import FastLanguageModel
         self.model, self.tokenizer = FastLanguageModel.from_pretrained(
             model_name=self.model_name,
-            max_seq_length=4096,
+            max_seq_length=2048,
             dtype=None,
             load_in_4bit=True,
         )

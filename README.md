@@ -41,7 +41,7 @@
 │         │ partial observability (telemetry)                 │
 │         ▼                                                   │
 │  ┌──────────────────────────────────────────────────┐      │
-│  │       GUARDIAN Agent (Qwen2.5-7B, GRPO)         │      │
+│  │       GUARDIAN Agent (Llama-3.2-3B, GRPO)         │      │
 │  │  11 intervention types | structured reasoning   │      │
 │  └──────────────────────┬───────────────────────────┘      │
 │         │ escalate_human / require_justification            │
@@ -132,7 +132,7 @@ guardian/
 │   ├── difficulty.py         # Adaptive L1→L2→L3 complexity
 │   └── reward_computer.py    # 11-component reward (no LLM)
 ├── agents/
-│   ├── guardian_agent.py     # Qwen2.5-7B with structured XML output
+│   ├── guardian_agent.py     # Llama-3.2-3B with structured XML output
 │   ├── worker_agent.py       # Finance/Ops/HR role-specialized workers
 │   ├── compliance_simulator.py  # Expert-in-the-loop (Snorkel prize)
 │   └── curriculum_agent.py   # Agent improving agent + UCB selector

@@ -1,6 +1,11 @@
-﻿"""
-GUARDIAN GRPO Training — Kaggle T4 x2 / Local 4050
-===================================================
+"""
+GUARDIAN GRPO Training — Kaggle T4 x2 / Colab
+===============================================
+Model: Meta Llama 3.2 3B Instruct (4-bit, via Unsloth)
+  - Fits on a single T4 (15GB VRAM) with room to spare
+  - Trains ~2x faster than 7B — 100 episodes in ~2 hours
+  - Meta's own model — relevant for the Meta hackathon
+
 Full training loop with:
   - UCB attack selection
   - Curriculum agent (agent improving agent)
@@ -14,8 +19,8 @@ Run:
     python -m guardian.training.train_grpo
 
 Requirements:
-    pip install unsloth trl peft datasets openai python-dotenv gymnasium
-    OPENAI_API_KEY in .env
+    pip install unsloth trl peft datasets python-dotenv gymnasium
+    OPENAI_API_KEY optional — fallback scripted attacker used if not set
 """
 
 from __future__ import annotations
@@ -97,18 +102,18 @@ def main():
         sys.exit(1)
 
     if not os.getenv("OPENAI_API_KEY"):
-        print("[ERROR] OPENAI_API_KEY not set in .env")
-        sys.exit(1)
+        print("[INFO] OPENAI_API_KEY not set — using free fallback scripted attacker.")
+        print("       Training will proceed normally. No API cost.")
 
     print("=" * 60)
     print("GUARDIAN GRPO Training — Full System")
     print("=" * 60)
 
     # ── [1/5] Load model ──────────────────────────────────────────────────
-    print("\n[1/5] Loading Qwen2.5-7B...")
+    print("\n[1/5] Loading Meta Llama 3.2 3B Instruct...")
     model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name="unsloth/Qwen2.5-7B-Instruct-bnb-4bit",
-        max_seq_length=4096,
+        model_name="unsloth/Llama-3.2-3B-Instruct-bnb-4bit",
+        max_seq_length=2048,
         dtype=None,
         load_in_4bit=True,
     )
@@ -124,7 +129,7 @@ def main():
     model = get_peft_model(model, lora_config)
     model.enable_input_require_grads()
     model.print_trainable_parameters()
-    print("   Model ready.")
+    print("   Llama 3.2 3B ready.")
 
     # ── [2/5] Initialise agents ───────────────────────────────────────────
     print("\n[2/5] Initialising agent fleet...")

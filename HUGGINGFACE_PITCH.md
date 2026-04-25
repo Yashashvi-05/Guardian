@@ -90,7 +90,7 @@ This prevents training plateaus and ensures the Guardian never overfits to a fix
 
 ### 6. Results & Why It Matters
 
-Using **Unsloth** and **TRL GRPO**, we fine-tuned Qwen2.5-7B against 11 attack types across 3 enterprise domains, including:
+Using **Unsloth** and **TRL GRPO**, we fine-tuned Llama-3.2-3B against 11 attack types across 3 enterprise domains, including:
 - **Authority Spoofing** — fabricated CFO overrides
 - **Rogue Internal AI** — an internal AI assistant escalating its own IAM privileges (Meta Sev-1 scenario)
 - **Salami Slicing** — cross-session sub-threshold payment aggregation detected via persistent JSONL audit

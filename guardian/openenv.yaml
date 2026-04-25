@@ -2,7 +2,7 @@ name: guardian-env
 version: "0.4.0"
 description: >
   GUARDIAN Fleet — Universal AI Immune System. Multi-agent RL environment training
-  a Guardian LLM (Qwen2.5-7B via GRPO) to detect and intercept 11 adversarial attack
+  a Guardian LLM (Llama-3.2-3B via GRPO) to detect and intercept 11 adversarial attack
   types across 3 enterprise domains via an MCP Security Gateway. Features the
   Semantic Action Abstraction Layer for Zero-Shot Domain Transfer — Guardian
   generalizes to unseen domains without retraining using [STATE_MOD|PRIV_ESC|EXT_COMM|FINANCIAL]
