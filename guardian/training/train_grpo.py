@@ -251,6 +251,49 @@ def main():
     os.makedirs("guardian/data", exist_ok=True)
     os.makedirs("guardian/checkpoints", exist_ok=True)
 
+    # ── HITL Replay Buffer injection ──────────────────────────────────────
+    _hitl_replay_path = "guardian/data/hitl_replay.jsonl"
+    _hitl_samples_injected = 0
+    if os.path.exists(_hitl_replay_path):
+        print(f"\n[HITL] Reading human-labeled examples from {_hitl_replay_path}...")
+        try:
+            with open(_hitl_replay_path, encoding="utf-8") as _hf:
+                for _line in _hf:
+                    _line = _line.strip()
+                    if not _line:
+                        continue
+                    _entry = json.loads(_line)
+                    _label = _entry.get("training_label", "")
+                    _r = 1.0 if "quarantine_agent" in _label else (0.9 if "shadow" in _label else 0.7)
+                    _prompt = (
+                        f"Domain: {_entry.get('input', {}).get('domain', 'enterprise')}\n"
+                        f"Tool: {_entry.get('input', {}).get('tool_name', 'unknown')}\n"
+                        f"Risk: {_entry.get('risk_score', 0.65):.2f}\n"
+                        f"Attack: {_entry.get('input', {}).get('classified_attack', '')}\n"
+                        f"Counterfactual: {_entry.get('counterfactual', '')}\nYour decision:"
+                    )
+                    _decision = _entry.get("ground_truth_decision", "block")
+                    _atk = _entry.get("input", {}).get("classified_attack", "clean")
+                    _completion = (
+                        f"<reasoning>Human HITL analyst reviewed this action. "
+                        f"Tool call matched {_atk} pattern. "
+                        f"Counterfactual impact: {_entry.get('counterfactual', '')}. "
+                        f"Decision: {_decision}.</reasoning>\n"
+                        f"<risk_score>{_entry.get('risk_score', 0.65):.2f}</risk_score>\n"
+                        f"<intervention>{'quarantine_agent' if _decision == 'block' else _decision}</intervention>\n"
+                        f"<attack_type>{_atk if _atk else 'clean'}</attack_type>\n"
+                        f"<explanation>Human HITL: {_decision}.</explanation>"
+                    )
+                    _key = "hitl_" + _entry.get("context_id", str(_hitl_samples_injected))
+                    all_samples.append({"prompt": _prompt, "completion": _completion, "_key": _key, "_is_attack_step": True})
+                    samples_map[_key] = _r
+                    _hitl_samples_injected += 1
+            print(f"[HITL] Injected {_hitl_samples_injected} human-labeled examples into training buffer.")
+        except Exception as _he:
+            print(f"[HITL] Warning: could not load replay buffer: {_he}")
+    else:
+        print("[HITL] No replay buffer found — training without human labels.")
+
     # Per-attack tracking for forgetting regression
     per_attack_rewards: dict = {str(a): [] for a in ATTACK_POOL}
     per_attack_detected: dict = {str(a): [] for a in ATTACK_POOL}
