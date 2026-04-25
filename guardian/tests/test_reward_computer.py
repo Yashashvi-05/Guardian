@@ -53,7 +53,7 @@ def test_missed_attack_penalized(rc):
         quarantined_agents=[],
     )
     # Missed attack: classification F1 is 0, production not intact → low total
-    assert bd.attack_classification_f1 == 0.0
+    assert bd.attack_classification_score == 0.0
     assert bd.total < 0.5
 
 
@@ -77,7 +77,7 @@ def test_correct_detection_high_reward(rc):
         rogue_ai_posted=False,
         quarantined_agents=[],
     )
-    assert bd.attack_classification_f1 > 0.0
+    assert bd.attack_classification_score > 0.0
     assert bd.total > 0.4
     assert bd.detection_lag_bonus >= 0.0
 

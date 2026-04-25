@@ -88,6 +88,12 @@ class GUARDIANServerEnvironment:
                 step_rewards=self._step_rewards,
                 explanation=action.explanation,
                 action_log=state.action_log,
+                iam_overpermissioned=getattr(state, "iam_overpermissioned", False),
+                rogue_ai_posted=getattr(state, "rogue_ai_posted", False),
+                quarantined_agents=getattr(state, "quarantined_agents", []),
+                attack_injection_step=None,
+                log_csv=False,
+                episode_id=self._episode_id,
             )
             reward = bd.total
         return StepResult(
