@@ -1,6 +1,5 @@
 {
   "name": "GUARDIAN HITL Decision Router",
-  "_description": "Human-in-the-Loop escalation for GUARDIAN gray-zone interventions. When Guardian outputs 'escalate_human', it fires POST /hitl/pending to this workflow, which sends a Telegram alert with 3 inline buttons. The human's click is routed back to GUARDIAN's /hitl/decision endpoint.",
   "nodes": [
     {
       "parameters": {
@@ -175,25 +174,81 @@
   ],
   "connections": {
     "Guardian Alert Webhook": {
-      "main": [[{"node": "Format Alert Message", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Format Alert Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Format Alert Message": {
-      "main": [[{"node": "Send Telegram Alert", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Send Telegram Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Send Telegram Alert": {
-      "main": [[{"node": "Acknowledge to Guardian", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Acknowledge to Guardian",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Telegram Button Callback": {
-      "main": [[{"node": "Parse Decision", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Parse Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Parse Decision": {
-      "main": [[{"node": "POST Decision to Guardian", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "POST Decision to Guardian",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "POST Decision to Guardian": {
-      "main": [[{"node": "Confirm to User", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Confirm to User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Confirm to User": {
-      "main": [[{"node": "Ack Telegram Callback", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Ack Telegram Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
