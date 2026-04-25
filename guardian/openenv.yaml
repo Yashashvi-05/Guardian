@@ -1,9 +1,9 @@
 name: guardian-env
-version: "0.2.0"
+version: "0.3.0"
 description: >
   GUARDIAN Fleet — AI security oversight multi-agent RL environment.
-  Trains a Guardian LLM to detect and intercept adversarial prompt injections,
-  authority spoofing, approval bypasses, and data exfiltration in enterprise workflows.
+  Trains a Guardian LLM to detect and intercept adversarial attacks in enterprise
+  agentic workflows including rogue internal AI, prompt injection, and data exfiltration.
 
 author: "GUARDIAN Team"
 license: "MIT"
@@ -15,11 +15,48 @@ skills:
   - write_db
   - process_payment
   - modify_firewall
+  - post_to_forum
+  - modify_iam_policy
+  - query_data_access_log
 
 metadata:
   render_modes: ["ansi", "human"]
-  max_episode_steps: 40
+  max_episode_steps: 60
   reward_threshold: 0.85
+  reward_components: 12
+  attack_types:
+    - authority_spoofing
+    - prompt_injection
+    - approval_bypass
+    - data_exfiltration
+    - confused_deputy
+    - approval_laundering
+    - salami_slicing
+    - schema_drift_exploit
+    - rogue_internal_ai
+    - delayed_exfiltration
+    - social_engineering
+  interventions:
+    - allow
+    - rewrite
+    - shadow
+    - interrogate
+    - reduce_privs
+    - require_justification
+    - quarantine_tool
+    - quarantine_agent
+    - rollback_k
+    - emergency_fork
+    - canary_inject
+    - escalate_human
+  stealth_levels: [1, 2, 3]
+  sub_themes:
+    - Fleet AI (Scalable Oversight)
+    - Halluminate (Multi-Actor)
+    - Scale AI (Enterprise Workflows)
+    - Snorkel AI (Experts-in-the-Loop)
+    - Mercor (Token-scaled rewards)
+    - Patronus AI (Schema Drift)
 
 tags:
   - multi-agent
@@ -27,3 +64,4 @@ tags:
   - scalable-oversight
   - adversarial-rl
   - fleet-ai
+  - mcp-proxy

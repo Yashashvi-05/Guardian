@@ -18,6 +18,7 @@ Reasoning MUST precede intervention token — verifiable by string parsing.
 from __future__ import annotations
 
 import json
+import os
 import random
 import re
 from typing import Any, Dict, List, Optional
@@ -66,8 +67,11 @@ VALID_ATTACK_TYPES = {
 
 
 class GuardianAgent:
-    def __init__(self, model_name: str = "unsloth/Qwen2.5-7B-Instruct-bnb-4bit"):
-        self.model_name = model_name
+    def __init__(self, model_name: Optional[str] = None):
+        self.model_name = (
+            model_name
+            or os.getenv("GUARDIAN_MODEL", "unsloth/Qwen2.5-7B-Instruct-bnb-4bit")
+        )
         self.model = None
         self.tokenizer = None
 
@@ -75,7 +79,7 @@ class GuardianAgent:
         from unsloth import FastLanguageModel
         self.model, self.tokenizer = FastLanguageModel.from_pretrained(
             model_name=self.model_name,
-            max_seq_length=2048,
+            max_seq_length=4096,
             dtype=None,
             load_in_4bit=True,
         )
@@ -116,12 +120,12 @@ class GuardianAgent:
             schema_version=schema_version, risk_history=risk_history,
         )
         inputs = self.tokenizer(
-            prompt, return_tensors="pt", truncation=True, max_length=1024
+            prompt, return_tensors="pt", truncation=True, max_length=2048
         ).to(self.model.device)
         with torch.no_grad():
             outputs = self.model.generate(
                 **inputs,
-                max_new_tokens=300,
+                max_new_tokens=512,
                 temperature=0.1,
                 do_sample=False,
                 pad_token_id=self.tokenizer.eos_token_id,
@@ -195,7 +199,7 @@ class GuardianAgent:
                 ).to(self.model.device)
                 with torch.no_grad():
                     out = self.model.generate(
-                        **inputs, max_new_tokens=200,
+                        **inputs, max_new_tokens=512,
                         temperature=temp, do_sample=True,
                         pad_token_id=self.tokenizer.eos_token_id,
                     )
@@ -225,14 +229,14 @@ class GuardianAgent:
         """Generate N completions from the HuggingFace model."""
         import torch
         inputs = self.tokenizer(
-            prompt, return_tensors="pt", truncation=True, max_length=1024
+            prompt, return_tensors="pt", truncation=True, max_length=2048
         ).to(self.model.device)
         results = []
         for _ in range(n):
             with torch.no_grad():
                 outputs = self.model.generate(
                     **inputs,
-                    max_new_tokens=200,
+                    max_new_tokens=512,
                     temperature=temperature,
                     do_sample=True,
                     pad_token_id=self.tokenizer.eos_token_id,

@@ -240,6 +240,7 @@ class SelfDistillationSampler:
         risk_history: Optional[List[float]] = None,
         faiss_context: Optional[str] = None,
         schema_version: int = 0,
+        temperature: float = 0.9,
     ) -> Optional[GoldenTrajectory]:
         n = self.cfg.n_samples
         print(f"\n  [SelfDistill] Exploring {n} paths for attack={attack_type}...")
@@ -249,7 +250,7 @@ class SelfDistillationSampler:
         decisions = self.guardian.sample_n_completions(
             action_log=action_log,
             n=n,
-            temperature=self.cfg.temperature,
+            temperature=temperature,
             faiss_context=faiss_context,
             schema_version=schema_version,
             risk_history=risk_history,

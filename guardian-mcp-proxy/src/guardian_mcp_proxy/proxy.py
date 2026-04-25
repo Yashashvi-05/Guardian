@@ -74,6 +74,8 @@ class GuardianProxy:
 
         self._action_log: List[Dict] = []
         self._rate_counts: Dict[str, int] = defaultdict(int)
+        self._rate_window_start: float = time.time()
+        self._RATE_WINDOW_SECONDS: int = 300
         self._session_id = str(uuid.uuid4())[:8]
         self._step = 0
         self._intercept_log: List[Dict] = []
@@ -89,11 +91,23 @@ class GuardianProxy:
     # ── Rate limit ───────────────────────────────────────────────────────────
 
     def _check_rate(self, tool: str) -> bool:
+        now = time.time()
+        if now - self._rate_window_start > self._RATE_WINDOW_SECONDS:
+            self._rate_counts = defaultdict(int)
+            self._rate_window_start = now
         limit = RATE_LIMITS.get(tool)
         if limit is None:
             return True
         self._rate_counts[tool] += 1
         return self._rate_counts[tool] <= limit
+
+    def reset_session(self) -> None:
+        """Reset all state for a new demo session."""
+        self._action_log = []
+        self._rate_counts = defaultdict(int)
+        self._rate_window_start = time.time()
+        self._intercept_log = []
+        self._step = 0
 
     # ── Guardian risk evaluation ─────────────────────────────────────────────
 
@@ -265,6 +279,11 @@ def create_app(config: Dict[str, Any]) -> FastAPI:
     @app.get("/health")
     async def health():
         return {"status": "ok", "summary": proxy.get_summary()}
+
+    @app.post("/reset")
+    async def reset_session():
+        proxy.reset_session()
+        return {"status": "reset"}
 
     @app.get("/audit")
     async def audit():

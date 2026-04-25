@@ -14,6 +14,7 @@ Orchestrates full GUARDIAN episodes:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import random
@@ -32,6 +33,7 @@ from guardian.agents.compliance_simulator import ComplianceSimulator
 from guardian.agents.curriculum_agent import UCBAttackSelector, CurriculumAgent
 from guardian.training.generate_audit_report import generate_audit_report
 from guardian.training.multi_session_tracker import MultiSessionTracker, extract_fingerprint, EpisodeFingerprint
+from guardian.environment.threat_intel_engine import ThreatIntelEngine
 
 
 @dataclass
@@ -88,6 +90,7 @@ class EpisodeRunner:
         self._log_csv = True  # enable per-episode CSV reward logging
         # S12: co-evolution engine wired into training path
         self._adaptation_engine = AttackAdaptationEngine()
+        self._threat_intel = ThreatIntelEngine()
 
     def run_episode(self, attack_type: Optional[str] = None) -> EpisodeResult:
         """
@@ -113,6 +116,9 @@ class EpisodeRunner:
         faiss_ctx = self._session_tracker.get_context_string(_seed_fp, k=3)
         if not faiss_ctx:
             faiss_ctx = self._get_faiss_context()  # fallback to temporal window
+        intel_ctx = self._threat_intel.get_attack_context_string(state.action_log)
+        if intel_ctx:
+            faiss_ctx = (faiss_ctx or "") + "\n" + intel_ctx
 
         # Get temporal window summary
         temporal_summary = self._get_temporal_summary()
@@ -160,7 +166,8 @@ class EpisodeRunner:
             risk_history.append(gd["risk_score"])
 
             _safe_prompt = self.guardian.build_training_prompt(state.action_log[:-1])
-            training_samples.append({"prompt": _safe_prompt, "completion": json.dumps(gd)})
+            _key = hashlib.md5(f"{episode_id}_{state.episode_step}_{len(training_samples)}".encode()).hexdigest()[:16]
+            training_samples.append({"prompt": _safe_prompt, "completion": json.dumps(gd), "_key": _key, "_is_attack_step": False})
 
         # ── Attack phase ─────────────────────────────────────────────────
         if attack_type and attack_type in ATTACK_PATTERNS:
@@ -168,6 +175,7 @@ class EpisodeRunner:
             # S12: use co-evolutionary adapted pattern in training path
             pattern = self._adaptation_engine.get_adapted_pattern(attack_type, base_pattern)
             state.attack_active = True
+            _attack_injection_step = state.episode_step + 1  # next worker_step IS the attack
 
             wa = self.worker.get_action(
                 f"Process workflow #{episode_id}",
@@ -209,7 +217,8 @@ class EpisodeRunner:
             risk_history.append(gd["risk_score"])
 
             prompt = self.guardian.build_training_prompt(state.action_log[:-1])
-            training_samples.append({"prompt": prompt, "completion": json.dumps(gd)})
+            _atk_key = hashlib.md5(f"{episode_id}_{state.episode_step}_{len(training_samples)}".encode()).hexdigest()[:16]
+            training_samples.append({"prompt": prompt, "completion": json.dumps(gd), "_key": _atk_key, "_is_attack_step": True})
 
             # Compliance simulator for escalation
             if gd.get("intervention") in ("escalate_human", "require_justification"):
@@ -225,13 +234,9 @@ class EpisodeRunner:
 
         production_intact = self.env.verify_production_intact()
 
-        # Locate attack injection step from action log for detection_lag component
-        _attack_injection_step: Optional[int] = None
-        if attack_type:
-            for _e in state.action_log:
-                if _e.get("role") == "worker" and _e.get("step", 0) > len(SAFE_TASKS):
-                    _attack_injection_step = _e.get("step")
-                    break
+        # _attack_injection_step set above when attack phase begins; default None for clean
+        if "gd" not in locals():
+            _attack_injection_step = None
 
         _intervention = gd.get("intervention", "allow") if "gd" in locals() else "allow"
         _reasoning = gd.get("reasoning", "") if "gd" in locals() else ""
@@ -258,6 +263,15 @@ class EpisodeRunner:
 
         # Update UCB
         self.ucb.update(attack_type, breakdown.total)
+
+        # Record to threat intel engine for temporal correlation detection
+        self._threat_intel.record(
+            attack_type=attack_type,
+            action_log=state.action_log,
+            production_intact=production_intact,
+            fork_triggered=state.fork_triggered,
+            guardian_detected=guardian_detected_type is not None,
+        )
 
         # S12: record episode result back to co-evolution engine
         self._adaptation_engine.record_episode(

@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "guardian-mcp-proxy"
+version = "0.1.0"
+description = "GUARDIAN MCP Security Proxy — intercepts and risk-scores every AI tool call"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.110",
+    "httpx>=0.27",
+    "uvicorn>=0.29",
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+guardian-mcp = "guardian_mcp_proxy.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

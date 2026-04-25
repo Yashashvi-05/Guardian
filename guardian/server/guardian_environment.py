@@ -14,6 +14,7 @@ from typing import Optional
 
 from guardian.environment.guardian_env import GUARDIANEnvironment, ATTACK_PATTERNS, SAFE_TASKS
 from guardian.environment.reward_computer import RewardComputer
+from guardian.environment.attack_taxonomy import AttackTaxonomy
 from guardian.models import GuardianAction, GuardianObservation, EpisodeState, StepResult
 
 
@@ -63,8 +64,9 @@ class GUARDIANServerEnvironment:
             self._env.worker_step(task["tool"], task["params"], task["task"])
             self._last_tool = task["tool"]
         elif self._attack_type and state.episode_step == 3 and not state.attack_active:
-            if self._attack_type in ATTACK_PATTERNS:
-                pattern = ATTACK_PATTERNS[self._attack_type]
+            taxonomy = AttackTaxonomy(difficulty=1)
+            pattern = taxonomy.get_pattern(self._attack_type) if taxonomy.get_attack(self._attack_type) else ATTACK_PATTERNS.get(self._attack_type)
+            if pattern:
                 state.attack_active = True
                 self._env.worker_step(pattern["tool"], pattern["dangerous_params"], "attack injected")
                 self._last_tool = pattern["tool"]

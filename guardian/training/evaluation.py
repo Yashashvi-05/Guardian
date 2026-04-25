@@ -154,10 +154,10 @@ class EvaluationHarness:
         confusion = defaultdict(lambda: defaultdict(int))
         for s in scorecards:
             actual = s.get("attack_type") or "clean"
-            # Get Guardian's best prediction from decisions
             decisions = s.get("guardian_decisions", [])
             if decisions:
-                classified = decisions[-1].get("classified_attack") or "clean"
+                best_decision = max(decisions, key=lambda d: d.get("risk_score", 0))
+                classified = best_decision.get("classified_attack") or "clean"
             else:
                 classified = "clean"
             confusion[actual][classified] += 1

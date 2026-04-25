@@ -17,6 +17,7 @@ any enterprise tool MCP server (databases, IAM, ticketing, etc).
 from __future__ import annotations
 
 import hashlib
+import hmac as _hmac
 import json
 import os
 import time
@@ -50,8 +51,8 @@ class MCPRequest:
             "agent": self.source_agent,
             "step": self.episode_step,
         }, sort_keys=True)
-        self.signature = hashlib.sha256(
-            (secret + payload).encode()
+        self.signature = _hmac.new(
+            secret.encode(), payload.encode(), hashlib.sha256
         ).hexdigest()[:16]
         return self
 
@@ -65,8 +66,10 @@ class MCPRequest:
             "agent": self.source_agent,
             "step": self.episode_step,
         }, sort_keys=True)
-        expected = hashlib.sha256((secret + payload).encode()).hexdigest()[:16]
-        return self.signature == expected
+        expected = _hmac.new(
+            secret.encode(), payload.encode(), hashlib.sha256
+        ).hexdigest()[:16]
+        return _hmac.compare_digest(self.signature, expected)
 
     def to_jsonrpc(self) -> Dict:
         return {
@@ -348,7 +351,7 @@ class MCPGateway:
             "token_invalid": _token_invalid,
         }
 
-        routing = ATTACK_MCP_ROUTING.get(classified_attack or "clean")
+        routing = ATTACK_MCP_ROUTING.get(classified_attack or "clean") or ATTACK_MCP_ROUTING["clean"]
         response = self._route(request, routing, guardian_intervention, risk_score)
 
         audit_entry = {

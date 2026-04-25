@@ -32,12 +32,6 @@ sys.path.insert(0, ".")
 from dotenv import load_dotenv
 load_dotenv()
 
-import torch
-from datasets import Dataset
-from peft import LoraConfig, get_peft_model
-from trl import GRPOConfig, GRPOTrainer
-from unsloth import FastLanguageModel
-
 from guardian.environment.guardian_env import GUARDIANEnvironment
 from guardian.environment.reward_computer import RewardComputer
 from guardian.agents.worker_agent import WorkerAgent
@@ -91,6 +85,17 @@ def _get_temperature(episode: int) -> float:
 
 
 def main():
+    try:
+        import torch
+        from datasets import Dataset
+        from peft import LoraConfig, get_peft_model
+        from trl import GRPOConfig, GRPOTrainer
+        from unsloth import FastLanguageModel
+    except ImportError as e:
+        print(f"[ERROR] GPU training dependencies not available: {e}")
+        print("Install: pip install unsloth trl peft datasets torch")
+        sys.exit(1)
+
     if not os.getenv("OPENAI_API_KEY"):
         print("[ERROR] OPENAI_API_KEY not set in .env")
         sys.exit(1)
@@ -103,7 +108,7 @@ def main():
     print("\n[1/5] Loading Qwen2.5-7B...")
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name="unsloth/Qwen2.5-7B-Instruct-bnb-4bit",
-        max_seq_length=1024,
+        max_seq_length=4096,
         dtype=None,
         load_in_4bit=True,
     )
@@ -173,6 +178,13 @@ def main():
     else:
         print(f"   Baseline already exists: {BASELINE_FILE}")
 
+    # Save untrained checkpoint before any GRPO updates (FIX-28)
+    untrained_dir = "guardian/checkpoints/untrained"
+    os.makedirs(untrained_dir, exist_ok=True)
+    model.save_pretrained(untrained_dir)
+    tokenizer.save_pretrained(untrained_dir)
+    print(f"   Untrained checkpoint saved to {untrained_dir}")
+
     # ── [4/5] GRPO config ─────────────────────────────────────────────────
     grpo_config = GRPOConfig(
         output_dir="guardian/checkpoints/grpo_tmp",
@@ -188,6 +200,8 @@ def main():
         gradient_checkpointing=True,
         fp16=True,
         optim="adamw_8bit",
+        num_generations=4,
+        max_completion_length=512,
     )
 
     all_samples: list = []
@@ -238,6 +252,7 @@ def main():
             "production_intact": result.production_intact,
             "fork_triggered": result.fork_triggered,
             "reward": round(result.reward, 4),
+            "reward_raw": round(result.reward_breakdown.raw_sum, 4),
             "elapsed_s": round(elapsed, 1),
             "detected": result.guardian_detected_type,
             "difficulty": runner.env.state.episode_step,
@@ -278,7 +293,7 @@ def main():
         # Accumulate training samples + track validity rate (task 1.8)
         for s in result.training_samples:
             all_samples.append(s)
-            samples_map[s["prompt"][:100]] = result.reward
+            samples_map[s.get("_key", s["prompt"][:100])] = result.reward
             _total_completions += 1
             if isinstance(s.get("completion"), str):
                 try:
@@ -343,12 +358,16 @@ def main():
             # Anneal format bonus weight based on validity rate (task 1.8)
             _format_bonus = 0.25 if validity_rate < 0.80 else 0.10
 
-            dataset = Dataset.from_list([{"prompt": s["prompt"]} for s in all_samples])
+            dataset = Dataset.from_list([
+                {"prompt": s["prompt"], "_key": s.get("_key", s["prompt"][:100])}
+                for s in all_samples
+            ])
 
-            def reward_fn(prompts, completions, **kwargs):
+            def reward_fn(prompts, completions, _key=None, **kwargs):
                 rewards = []
-                for p, c in zip(prompts, completions):
-                    base_reward = samples_map.get(p[:100], 0.5)
+                for i, (p, c) in enumerate(zip(prompts, completions)):
+                    key = (_key[i] if _key is not None else None) or p[:100]
+                    base_reward = samples_map.get(key, 0.5)
                     parsed = guardian._parse(c)
                     format_ok = parsed.get("parsed_correctly", False)
                     risk_score = parsed.get("risk_score", 0.5)
@@ -489,6 +508,21 @@ def main():
     print(f"  Scorecards: {SCORECARD_FILE}")
     print(f"  Final:     {final}")
     print(f"{'='*60}\n")
+
+    # HuggingFace Hub push (FIX-24)
+    hf_repo = os.getenv("HF_REPO", "").strip()
+    if hf_repo:
+        print(f"\nPushing model to HuggingFace Hub: {hf_repo}")
+        try:
+            hf_token = os.getenv("HF_TOKEN")
+            model.push_to_hub(hf_repo, token=hf_token)
+            tokenizer.push_to_hub(hf_repo, token=hf_token)
+            print(f"✅ Model published: https://huggingface.co/{hf_repo}")
+        except Exception as e:
+            print(f"⚠️  HuggingFace push failed: {e}")
+            print(f"   Manual: model.push_to_hub('{hf_repo}')")
+    else:
+        print("Tip: Set HF_REPO env var to auto-publish: export HF_REPO=your-org/guardian-qwen2.5-7b-grpo")
 
     # Print UCB stats
     print("\nFinal UCB Statistics:")

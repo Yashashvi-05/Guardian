@@ -234,6 +234,16 @@ class AttackAdaptationEngine:
         if stealth_variants and rec.current_stealth_level in stealth_variants:
             adapted["injection"] = stealth_variants[rec.current_stealth_level]
 
+        # Keep rogue_internal_ai IAM group consistent with injection string (FIX-12)
+        if attack_type == "rogue_internal_ai":
+            _dp = adapted.get("dangerous_params", {})
+            _followup = _dp.get("_iam_followup", {})
+            if _followup:
+                group_by_stealth = {1: "eng-all", 2: "infra", 3: "data-eng"}
+                _followup["group"] = group_by_stealth.get(rec.current_stealth_level, "eng-all")
+                _dp["_iam_followup"] = _followup
+                adapted["dangerous_params"] = _dp
+
         if rec.red_herring_active:
             adapted["_red_herring_task"] = random.choice(RED_HERRING_TASKS)
 

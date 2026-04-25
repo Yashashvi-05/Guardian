@@ -166,13 +166,15 @@ class MultiSessionTracker:
         self,
         path: str = "guardian/data/session_fingerprints.jsonl",
         max_size: int = 2000,
-        use_faiss: bool = True,
+        use_faiss: bool = False,
     ) -> None:
         self.path = path
         self.max_size = max_size
         self._records: List[EpisodeFingerprint] = []
         self._index = None  # FAISS index (lazy init)
         self._use_faiss = use_faiss
+        self._dirty_count: int = 0
+        self._REBUILD_THRESHOLD: int = 50
         os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
         self._load()
 
@@ -183,7 +185,7 @@ class MultiSessionTracker:
         self._records.append(record)
         if len(self._records) > self.max_size:
             self._records = self._records[-self.max_size:]
-        self._index = None  # Invalidate FAISS index
+        self._dirty_count += 1  # incremental rebuild threshold, not immediate invalidation
 
         with open(self.path, "a", encoding="utf-8") as f:
             f.write(json.dumps(asdict(record)) + "\n")
@@ -261,10 +263,11 @@ class MultiSessionTracker:
         self, query: np.ndarray, k: int, exclude_attack: Optional[str]
     ) -> List[Tuple[float, EpisodeFingerprint]]:
         import faiss
-        if self._index is None:
+        if self._index is None or self._dirty_count >= self._REBUILD_THRESHOLD:
             vectors = np.array([r.fingerprint for r in self._records], dtype=np.float32)
             self._index = faiss.IndexFlatL2(FINGERPRINT_DIM)
             self._index.add(vectors)
+            self._dirty_count = 0
 
         q = query.reshape(1, -1).astype(np.float32)
         distances, indices = self._index.search(q, min(k * 2, len(self._records)))

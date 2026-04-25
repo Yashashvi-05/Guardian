@@ -66,14 +66,19 @@ You have 30 seconds."
 
 ## Results (2:15–2:45)
 
+> Run these after training to get real numbers:
+> `python -m guardian.training.evaluation`
+> `python -m guardian.training.latency_benchmark --checkpoint guardian/checkpoints/final`
+
 [Show 4 headline numbers]
 
 | Metric | Untrained | Trained | Delta |
 |--------|-----------|---------|-------|
-| Detection Rate | 30% | 77% | **+47pp** |
-| False Alarm Rate | 90% | 29% | **−61pp** |
-| Low-and-Slow F1 | 0.12 | 0.78 | **+0.66** |
-| Avg Honeypot Dwell | 0 steps | 4.2 steps | **+4.2** |
+| Detection Rate | ~30% | **[run eval]** | **[run eval]** |
+| False Alarm Rate | ~90% | **[run eval]** | **[run eval]** |
+| Low-and-Slow F1 | ~0.12 | **[run eval]** | **[run eval]** |
+| Avg Honeypot Dwell | 0 steps | **[run eval]** | **[run eval]** |
+| Inference Latency (p50) | — | **[run benchmark]** | — |
 
 "And because GUARDIAN trains against a co-evolving adversary — as the attacker gets sneakier, the defender gets sharper. That's the Red Queen dynamic built into the training loop."
 
@@ -95,10 +100,10 @@ Who has an environment where AI agents touch money, data, or IAM?"
 > SIEM rules fire on known signatures. GUARDIAN fires on behavioral patterns learned from RL — it generalizes to novel variants it has never seen, including compound attacks and delayed exfiltration that span multiple sessions.
 
 **Q: What's the false alarm rate in production?**
-> On our held-out clean episodes: 29%. That's the current trained model. The calibration bonus in the reward function specifically penalizes over-alerting — we're trading detection rate for precision as training progresses. The target is <10% false alarms at 70%+ detection.
+> Run `python -m guardian.training.evaluation` after training for real numbers. The calibration bonus in the reward function specifically penalizes over-alerting — we're trading detection rate for precision as training progresses. The target is <10% false alarms at 70%+ detection.
 
 **Q: Could a sophisticated attacker evade GUARDIAN?**
-> Yes — that's the point of the co-evolutionary training loop. The attacker in our simulation mutates every time GUARDIAN detects it. Current best evasion: Level 3 stealth `rogue_internal_ai`, which achieves 21% detection miss rate. That's the adversary we're training against next.
+> Yes — that's the point of the co-evolutionary training loop. The attacker in our simulation mutates every time GUARDIAN detects it. Run `python -m guardian.training.evaluation` to see current holdout F1 on Level 3 stealth variants. That's the adversary we're training against next.
 
 **Q: Why GRPO and not PPO or DPO?**
 > GRPO doesn't need a separate value network, which halves memory footprint on T4 GPUs. It also naturally handles the group comparison structure of our reward: the same episode is scored across N completions, GRPO normalizes within the group. This makes training stable without careful baseline tuning.

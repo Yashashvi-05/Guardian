@@ -42,10 +42,25 @@ except ImportError:
 
 from guardian.environment.guardian_env import GUARDIANEnvironment, ATTACK_PATTERNS
 from guardian.environment.reward_computer import RewardComputer
-from guardian.environment.enterprise_graph import EnterpriseGraph
-from guardian.environment.threat_intel_engine import KILL_CHAIN, ThreatIntelEngine
 from guardian.agents.guardian_agent import GuardianAgent
 from guardian.training.evaluation import EvaluationHarness
+
+try:
+    from guardian.environment.enterprise_graph import EnterpriseGraph
+    HAS_ENTERPRISE_GRAPH = True
+except ImportError as e:
+    print(f"[Dashboard] Warning: EnterpriseGraph unavailable: {e}")
+    EnterpriseGraph = None
+    HAS_ENTERPRISE_GRAPH = False
+
+try:
+    from guardian.environment.threat_intel_engine import KILL_CHAIN, ThreatIntelEngine
+    HAS_THREAT_INTEL = True
+except ImportError as e:
+    print(f"[Dashboard] Warning: ThreatIntelEngine unavailable: {e}")
+    KILL_CHAIN = {}
+    ThreatIntelEngine = None
+    HAS_THREAT_INTEL = False
 
 
 # ── Pre-recorded realistic mock episodes (task 7.11) ─────────────────────────

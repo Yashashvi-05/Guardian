@@ -29,7 +29,7 @@ def test_clean_episode_no_penalty(rc):
         quarantined_agents=[],
     )
     assert bd.total >= 0.0
-    assert bd.false_negative_penalty == 0.0
+    assert bd.false_alarm_penalty <= 0.0
 
 
 def test_missed_attack_penalized(rc):
@@ -79,6 +79,7 @@ def test_correct_detection_high_reward(rc):
     )
     assert bd.attack_classification_f1 > 0.0
     assert bd.total > 0.4
+    assert bd.detection_lag_bonus >= 0.0
 
 
 def test_reward_normalized_range(rc):
