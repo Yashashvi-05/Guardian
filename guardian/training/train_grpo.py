@@ -73,9 +73,10 @@ from guardian.training.elo_tracker import ELOTracker
 
 
 # ── Config ────────────────────────────────────────────────────────────────────
-TOTAL_EPISODES = 200
+# Env-var overrides for HuggingFace A10G Space (set via Space secrets)
+TOTAL_EPISODES = int(os.getenv("GUARDIAN_EPISODES", "300"))   # A10G: 300 eps ~ 3-4 hrs
 TRAIN_EVERY = 8
-SAVE_EVERY = 50
+SAVE_EVERY = int(os.getenv("GUARDIAN_SAVE_EVERY", "50"))      # checkpoint + HF push every 50 eps
 EVAL_EVERY = 25          # task 5.1: validate every 25 episodes
 LOG_FILE = "guardian/data/training_log.jsonl"
 SCORECARD_FILE = "guardian/data/scorecards.jsonl"
@@ -570,6 +571,18 @@ def main():
             model.save_pretrained(ckpt)
             tokenizer.save_pretrained(ckpt)
             print(f"\n  >>> Checkpoint saved: {ckpt}")
+
+            # Auto-push checkpoint to HuggingFace Hub during training (A10G Space)
+            _hf_repo_mid = os.getenv("HF_REPO", "").strip()
+            _hf_token_mid = os.getenv("HF_TOKEN", "").strip()
+            if _hf_repo_mid and _hf_token_mid:
+                try:
+                    print(f"  >>> Pushing ep={ep} checkpoint to HuggingFace Hub: {_hf_repo_mid}")
+                    model.push_to_hub(_hf_repo_mid, token=_hf_token_mid, commit_message=f"GUARDIAN checkpoint ep={ep}")
+                    tokenizer.push_to_hub(_hf_repo_mid, token=_hf_token_mid, commit_message=f"Tokenizer ep={ep}")
+                    print(f"  >>> Pushed to https://huggingface.co/{_hf_repo_mid}")
+                except Exception as _push_err:
+                    print(f"  >>> HF push failed (continuing): {_push_err}")
             # Run eval harness on held-out scenarios and log
             _ckpt_det_rates = {}
             _ckpt_fa_rates = {}

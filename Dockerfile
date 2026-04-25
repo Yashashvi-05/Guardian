@@ -1,35 +1,28 @@
-FROM python:3.11-slim
+FROM nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends python3.11 python3.11-dev python3-pip python3.11-venv build-essential curl git wget git-lfs libssl-dev libffi-dev libgomp1 && rm -rf /var/lib/apt/lists/*
+
+RUN ln -sf /usr/bin/python3.11 /usr/bin/python3 && ln -sf /usr/bin/python3 /usr/bin/python && pip install --upgrade pip
 
 WORKDIR /app
 
-# System deps
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential curl \
-    && rm -rf /var/lib/apt/lists/*
+RUN pip install --no-cache-dir torch==2.3.0+cu121 torchvision==0.18.0+cu121 --extra-index-url https://download.pytorch.org/whl/cu121
 
-# Python deps first for layer cache
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git"
 
-# App code
+RUN pip install --no-cache-dir "trl>=0.8.6" "peft>=0.7.0" "datasets>=2.14.0" "transformers>=4.40.0" "accelerate>=0.27.0" "bitsandbytes>=0.43.0" "huggingface_hub>=0.22.0" "openai>=1.0.0" "gymnasium>=0.29.0" "numpy>=1.24.0" "python-dotenv>=1.0.0" "fastapi>=0.110.0" "uvicorn[standard]>=0.29.0" "pydantic>=2.0.0" "websockets>=12.0" "requests>=2.31.0" "python-multipart>=0.0.9" "httpx>=0.27.0" "gradio>=4.0.0" "openenv-core[cli]>=0.1.1"
+
 COPY guardian/ ./guardian/
-COPY guardian-mcp-proxy/ ./guardian-mcp-proxy/
-COPY setup.py .
-RUN pip install --no-cache-dir -e . --no-deps
-RUN pip install --no-cache-dir -e ./guardian-mcp-proxy
+COPY server/ ./server/
+COPY models.py training_space.py setup.py ./
 
-# Data directories
-RUN mkdir -p guardian/data guardian/checkpoints
+RUN pip install --no-cache-dir -e . --no-deps && mkdir -p guardian/data guardian/checkpoints
 
-# Environment variable validation (non-fatal if unset)
-ENV GUARDIAN_PORT=7860
-ENV MCP_UPSTREAM_URL=""
-ENV HMAC_SECRET="changeme"
-ENV LOG_LEVEL="info"
+ENV PORT=7860
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
 
-EXPOSE 7860 8000
+EXPOSE 7860
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s \
-    CMD curl -f http://localhost:${GUARDIAN_PORT}/ || exit 1
-
-CMD ["python", "-m", "guardian.dashboard.app"]
+CMD ["python", "training_space.py"]
