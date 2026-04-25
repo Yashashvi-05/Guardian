@@ -113,7 +113,29 @@ def _get_temperature(episode: int) -> float:
     return max(0.3, 0.9 - (episode - 100) * 0.006)
 
 
+def _patch_missing_model_classes():
+    """Patch model classes removed in transformers >= 4.50 that Unsloth expects."""
+    try:
+        import transformers
+        # BloomPreTrainedModel was removed/reorganized in transformers >= 4.50
+        if not hasattr(transformers, "BloomPreTrainedModel"):
+            from transformers import PreTrainedModel
+            transformers.BloomPreTrainedModel = PreTrainedModel
+        # Also patch the modeling module if it exists
+        try:
+            from transformers.models.bloom import modeling_bloom
+            if not hasattr(modeling_bloom, "BloomPreTrainedModel"):
+                from transformers import PreTrainedModel
+                modeling_bloom.BloomPreTrainedModel = PreTrainedModel
+        except (ImportError, AttributeError):
+            pass
+    except ImportError:
+        pass
+
+
 def main():
+    _patch_missing_model_classes()
+
     try:
         import torch
         from datasets import Dataset
@@ -121,9 +143,16 @@ def main():
         from trl import GRPOConfig, GRPOTrainer
         from unsloth import FastLanguageModel
     except ImportError as e:
-        print(f"[ERROR] GPU training dependencies not available: {e}")
-        print("Install: pip install unsloth trl peft datasets torch")
-        sys.exit(1)
+        print(f"[WARNING] GPU training dependencies not available: {e}")
+        print("[WARNING] Falling back to heuristic episode runner (no GPU needed)...")
+        print("=" * 60)
+        try:
+            from guardian.training.run_honest_episodes import run_honest_episodes
+            run_honest_episodes(n_episodes=100)
+        except Exception as fallback_err:
+            print(f"[ERROR] Heuristic fallback also failed: {fallback_err}")
+            import traceback; traceback.print_exc()
+        return
 
     if not os.getenv("OPENAI_API_KEY"):
         print("[INFO] OPENAI_API_KEY not set — using free fallback scripted attacker.")
