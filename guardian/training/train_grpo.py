@@ -31,11 +31,34 @@ import os
 import random
 import sys
 import time
+import types
 
 sys.path.insert(0, ".")
 
+# ── Kaggle / Colab compatibility fix ─────────────────────────────────────────
+# llm_blender (a TRL dependency) uses transformers.utils.hub.TRANSFORMERS_CACHE
+# which was removed in transformers >= 4.40. Mock the entire module tree before
+# TRL loads so the broken import never fires.
+def _mock_llm_blender():
+    for mod_name in [
+        "llm_blender",
+        "llm_blender.blender",
+        "llm_blender.blender.blender",
+        "llm_blender.blender.blender_utils",
+        "llm_blender.pair_ranker",
+        "llm_blender.pair_ranker.pairrm_inference",
+    ]:
+        if mod_name not in sys.modules:
+            sys.modules[mod_name] = types.ModuleType(mod_name)
+    # Ensure the top-level Blender class exists (TRL may reference it)
+    sys.modules["llm_blender"].Blender = None  # type: ignore
+
+_mock_llm_blender()
+# ── End Kaggle fix ────────────────────────────────────────────────────────────
+
 from dotenv import load_dotenv
 load_dotenv()
+
 
 from guardian.environment.guardian_env import GUARDIANEnvironment
 from guardian.environment.reward_computer import RewardComputer
