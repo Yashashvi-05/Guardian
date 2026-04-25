@@ -169,11 +169,17 @@ def build_app():
             outputs=[status_box, summary_box, episode_table, stdout_box],
         )
 
-        # Auto-refresh every 30 seconds
+        # Initial load on page open
         demo.load(
             fn=refresh,
             outputs=[status_box, summary_box, episode_table, stdout_box],
-            every=30,
+        )
+
+        # Auto-refresh every 30 seconds — Gradio 6+ uses gr.Timer
+        timer = gr.Timer(value=30)
+        timer.tick(
+            fn=refresh,
+            outputs=[status_box, summary_box, episode_table, stdout_box],
         )
 
     return demo
