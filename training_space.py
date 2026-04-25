@@ -79,7 +79,9 @@ def _read_stdout(tail: int = 60) -> str:
         return "Waiting for training to start..."
     try:
         lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
-        return "\n".join(lines[-tail:])
+        if len(lines) <= tail + 20:
+            return "\n".join(lines)
+        return "\n".join(lines[:20]) + "\n\n... [logs truncated] ...\n\n" + "\n".join(lines[-tail:])
     except Exception:
         return "Reading log..."
 
