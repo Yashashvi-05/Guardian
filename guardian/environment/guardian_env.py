@@ -1,13 +1,15 @@
 """
-GUARDIAN Environment v3
+GUARDIAN Environment v4
 ========================
 Full enterprise environment with:
   - MCP Security Gateway (JSON-RPC 2.0 tool mediation)
+  - Semantic Action Abstraction Layer (Zero-Shot Domain Transfer)
   - Action Translation Layer (12 intervention types incl. quarantine_agent)
   - Taint Tracker + Hash-Chained Audit Log
   - Enterprise Graph integration
   - Canary Token System + Intent Consistency Probe
   - Rogue Internal AI attack support (multi-app log, IAM state tracking)
+  - Multi-Domain Support (Enterprise, FinOps, Corporate Governance)
 """
 
 from __future__ import annotations
@@ -172,6 +174,9 @@ class GUARDIANEnvironment:
         self._enterprise = EnterpriseGraph()
         # Lazy-initialize MCP gateway to avoid import cycle at module load
         self._mcp_gateway = None
+        # Domain manager for zero-shot transfer demonstrations
+        from guardian.mcp.domain_servers import DomainManager
+        self._domain_manager = DomainManager()
 
     def _get_gateway(self):
         if self._mcp_gateway is None:
@@ -179,9 +184,14 @@ class GUARDIANEnvironment:
             self._mcp_gateway = MCPGateway()
         return self._mcp_gateway
 
-    def reset(self, attack_type: Optional[str] = None) -> WorldState:
+    def reset(self, attack_type: Optional[str] = None, options: Optional[dict] = None) -> WorldState:
         import uuid
         self._episode_id = str(uuid.uuid4())[:8]
+
+        # Handle domain switching for zero-shot transfer demos
+        if options and "domain" in options:
+            self._domain_manager.switch_domain(options["domain"])
+            self._domain_manager.reset_active_server()
 
         db = {
             f"record_{i:03d}": {
@@ -258,14 +268,28 @@ class GUARDIANEnvironment:
         if s.fork_triggered:
             s.shadow_tokens_generated += random.randint(50, 200)
 
+        # ── Semantic Action Abstraction Layer ───────────────────────────────────
+        # Translate domain-specific tool name → universal security primitives
+        # This is the mechanism that enables Zero-Shot Domain Transfer:
+        # Guardian learns [STATE_MOD|PRIV_ESC|EXT_COMM|FINANCIAL] patterns,
+        # not memorized tool names — so it generalizes to unseen domains.
+        from guardian.mcp.tool_taxonomy import get_capability_tags, is_high_risk_tool
+        capability_tag = get_capability_tags(tool)
+        # ── End Semantic Action Abstraction ──────────────────────────────────────
+
         result = self._execute_tool(tool, params, target_db, s)
 
         # Track multi-app log for cross-system telemetry
         if tool in ("post_to_forum", "modify_iam_policy", "query_data_access_log"):
             self._update_multi_app_log(tool, params, s)
 
-        log_entry = {"step": s.episode_step, "role": role, "tool": tool,
-                     "params": params, "reasoning": reasoning, "result": result}
+        log_entry = {
+            "step": s.episode_step, "role": role, "tool": tool,
+            "params": params, "reasoning": reasoning, "result": result,
+            # Zero-shot transfer abstraction — Guardian prompt sees this tag
+            "capability_tag": capability_tag,
+            "high_risk_tool": is_high_risk_tool(tool),
+        }
         s.action_log.append(log_entry)
         self._record_hash("WORKER_STEP", {"tool": tool, "step": s.episode_step})
 
@@ -603,6 +627,16 @@ class GUARDIANEnvironment:
         if self._mcp_gateway is None:
             return {"mcp_enabled": False}
         return self._mcp_gateway.get_mcp_audit_report()
+
+    def get_domain_transfer_report(self) -> Dict:
+        """Zero-shot domain transfer demo report — shows Guardian generalizing across domains."""
+        return self._domain_manager.generate_zero_shot_demo_report()
+
+    def switch_domain(self, domain: str) -> Dict:
+        """Hot-swap to a new enterprise domain for zero-shot transfer demonstration."""
+        info = self._domain_manager.switch_domain(domain)
+        self._domain_manager.reset_active_server()
+        return info
 
     def _hash_db(self, db: Dict) -> str:
         return hashlib.sha256(json.dumps(db, sort_keys=True).encode()).hexdigest()

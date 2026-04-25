@@ -1,9 +1,12 @@
 name: guardian-env
-version: "0.3.0"
+version: "0.4.0"
 description: >
-  GUARDIAN Fleet — AI security oversight multi-agent RL environment.
-  Trains a Guardian LLM to detect and intercept adversarial attacks in enterprise
-  agentic workflows including rogue internal AI, prompt injection, and data exfiltration.
+  GUARDIAN Fleet — Universal AI Immune System. Multi-agent RL environment training
+  a Guardian LLM (Qwen2.5-7B via GRPO) to detect and intercept 11 adversarial attack
+  types across 3 enterprise domains via an MCP Security Gateway. Features the
+  Semantic Action Abstraction Layer for Zero-Shot Domain Transfer — Guardian
+  generalizes to unseen domains without retraining using [STATE_MOD|PRIV_ESC|EXT_COMM|FINANCIAL]
+  universal primitives.
 
 author: "GUARDIAN Team"
 license: "MIT"
@@ -24,6 +27,16 @@ metadata:
   max_episode_steps: 60
   reward_threshold: 0.85
   reward_components: 12
+  difficulty_levels: [1, 2, 3]
+  domains:
+    - enterprise          # Training domain (HR/Finance)
+    - finops              # Zero-shot domain (Algo Trading)
+    - corporate_governance # Zero-shot domain (Board/Governance)
+  semantic_abstraction_primitives:
+    - STATE_MOD
+    - PRIV_ESC
+    - EXT_COMM
+    - FINANCIAL
   attack_types:
     - authority_spoofing
     - prompt_injection
@@ -60,8 +73,14 @@ metadata:
 
 tags:
   - multi-agent
+  - mcp-gateway
   - enterprise-security
   - scalable-oversight
   - adversarial-rl
   - fleet-ai
   - mcp-proxy
+  - zero-shot-transfer
+  - semantic-abstraction
+  - grpo
+  - self-improving
+  - long-horizon
