@@ -2,7 +2,7 @@
 GUARDIAN FastAPI Server
 ========================
 OpenEnv-compliant HTTP server for GUARDIAN environment.
-Exposes /reset, /step, /state endpoints over HTTP.
+Exposes /reset, /step, /state, /hitl/* endpoints over HTTP.
 
 Run locally:
     uvicorn guardian.server.app:app --host 0.0.0.0 --port 8000
@@ -10,6 +10,11 @@ Run locally:
 Docker:
     docker build -t guardian-env .
     docker run -p 8000:8000 guardian-env
+
+HITL Setup (optional, for n8n/Telegram escalation):
+    export N8N_WEBHOOK_URL=http://localhost:5678/webhook/guardian-alert
+    export HITL_TIMEOUT_S=30
+    # Then configure n8n_guardian_workflow.json and your Telegram bot.
 """
 from __future__ import annotations
 
@@ -23,10 +28,14 @@ from pydantic import BaseModel
 
 from guardian.models import GuardianAction
 from guardian.server.guardian_environment import GUARDIANServerEnvironment
+from guardian.hitl.hitl_router import hitl_router
 
 
-app = FastAPI(title="GUARDIAN Fleet Environment", version="0.2.0")
+app = FastAPI(title="GUARDIAN Fleet Environment", version="0.3.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+# Mount HITL router — /hitl/pending, /hitl/decision, /hitl/status/<id>
+app.include_router(hitl_router)
 
 _env = GUARDIANServerEnvironment()
 
@@ -147,12 +156,20 @@ def compare_checkpoints(a: str = "episode_50", b: str = "final"):
 def root():
     return {
         "name": "GUARDIAN Fleet Environment",
-        "version": "0.2.0",
-        "endpoints": ["/reset", "/step", "/state", "/health"],
+        "version": "0.3.0",
+        "endpoints": ["/reset", "/step", "/state", "/health",
+                      "/hitl/pending", "/hitl/decision", "/hitl/status/{id}"],
         "attacks": ["authority_spoofing", "prompt_injection", "approval_bypass",
                     "data_exfiltration", "confused_deputy", "approval_laundering",
-                    "salami_slicing", "schema_drift_exploit"],
+                    "salami_slicing", "schema_drift_exploit", "rogue_internal_ai"],
         "interventions": ["allow", "rewrite", "shadow", "interrogate", "reduce_privs",
-                          "require_justification", "quarantine_tool", "rollback_k",
-                          "emergency_fork", "canary_inject", "escalate_human"],
+                          "require_justification", "quarantine_tool", "quarantine_agent",
+                          "rollback_k", "emergency_fork", "canary_inject", "escalate_human"],
+        "hitl": {
+            "description": "Human-in-the-Loop gray-zone escalation via n8n + Telegram",
+            "workflow": "n8n_guardian_workflow.json",
+            "env_vars": ["N8N_WEBHOOK_URL", "HITL_TIMEOUT_S", "HITL_DEFAULT"],
+            "openclaw_poll": "GET /hitl/pending every 10s",
+            "openclaw_decide": "POST /hitl/decision {context_id, decision}",
+        },
     }
