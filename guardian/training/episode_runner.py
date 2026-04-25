@@ -109,6 +109,7 @@ class EpisodeRunner:
         step_rewards = []
         last_worker_tool = "read_db"
         risk_history = [0.0] * 10
+        _attack_injection_step = None  # set later if attack phase runs
 
         # Cross-session fingerprint context for Guardian prompt (task 3.8)
         # Compute a dummy fingerprint from empty log to seed the query
@@ -234,10 +235,7 @@ class EpisodeRunner:
 
         production_intact = self.env.verify_production_intact()
 
-        # _attack_injection_step set above when attack phase begins; default None for clean
-        if "gd" not in locals():
-            _attack_injection_step = None
-
+        # gd is always set (safe task loop runs at least once)
         _intervention = gd.get("intervention", "allow") if "gd" in locals() else "allow"
         _reasoning = gd.get("reasoning", "") if "gd" in locals() else ""
 
