@@ -147,7 +147,7 @@ def _make_grpo_trainer(model, reward_funcs, args, train_dataset, tokenizer):
             train_dataset=train_dataset, tokenizer=tokenizer,
         )
 
-
+def main():
     _patch_missing_model_classes()
 
     try:
