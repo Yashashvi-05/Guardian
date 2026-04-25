@@ -152,6 +152,20 @@ def main():
     model = get_peft_model(model, lora_config)
     model.enable_input_require_grads()
     model.print_trainable_parameters()
+
+    # ── FIX: Unsloth/TRL 'warnings_issued' compatibility patch ───────────────
+    # TRL's GRPOTrainer (Transformers 5.5+) calls model.warnings_issued which
+    # Unsloth's patched LlamaForCausalLM does not expose. This one line fixes
+    # the crash that silently prevented ALL gradient updates from running.
+    if not hasattr(model, 'warnings_issued'):
+        model.warnings_issued = set()
+    # Also patch the inner base model in case TRL unwraps the PEFT wrapper
+    if hasattr(model, 'base_model') and not hasattr(model.base_model, 'warnings_issued'):
+        model.base_model.warnings_issued = set()
+    if hasattr(model, 'model') and not hasattr(model.model, 'warnings_issued'):
+        model.model.warnings_issued = set()
+    # ── End fix ───────────────────────────────────────────────────────────────
+
     print("   Llama 3.2 3B ready.")
 
     # ── [2/5] Initialise agents ───────────────────────────────────────────
@@ -325,9 +339,16 @@ def main():
             _total_completions += 1
             if isinstance(s.get("completion"), str):
                 try:
-                    import json as _json
                     parsed = guardian._parse(s["completion"])
-                    if parsed.get("parsed_correctly"):
+                    # FIX: count as valid if ANY parsing path succeeded
+                    # (XML=True, JSON fallback=False but still usable, heuristic=False but still usable)
+                    # Previously only XML path set parsed_correctly=True, so untrained
+                    # model always scored 0% — GRPO received no signal.
+                    # We count heuristic fallback as valid-enough: any completion where
+                    # we extracted risk_score + intervention is trainable.
+                    has_risk = "risk_score" in parsed
+                    has_iv = "intervention" in parsed
+                    if has_risk and has_iv:
                         _valid_completions += 1
                 except Exception:
                     pass
@@ -370,6 +391,9 @@ def main():
 
                 try:
                     GRPOTrainer(model=model, reward_funcs=[replay_reward_fn], args=grpo_config, train_dataset=replay_dataset, processing_class=tokenizer).train()
+                    # Re-apply warnings_issued patch after trainer may have unwrapped model
+                    if not hasattr(model, 'warnings_issued'):
+                        model.warnings_issued = set()
                     print("  >>> Replay training done.")
                 except Exception as e:
                     print(f"  >>> Replay training error: {e}")
@@ -397,18 +421,27 @@ def main():
                     key = (_key[i] if _key is not None else None) or p[:100]
                     base_reward = samples_map.get(key, 0.5)
                     parsed = guardian._parse(c)
-                    format_ok = parsed.get("parsed_correctly", False)
+                    # FIX: treat all three parse paths (XML / JSON / heuristic) as usable.
+                    # Previously only XML path returned parsed_correctly=True, so the
+                    # untrained model — which never outputs XML tags — gave format_bonus=-0.25
+                    # to every single completion, creating a strongly negative reward signal
+                    # that suppressed learning completely.
+                    # Now: full XML = +bonus, JSON fallback = smaller bonus, heuristic = 0.
+                    if parsed.get("parsed_correctly"):          # XML path
+                        format_bonus = _format_bonus
+                    elif parsed.get("reasoning", "") != parsed.get("reasoning", "")[:80]:  # JSON had reasoning field
+                        format_bonus = _format_bonus * 0.5     # JSON partial credit
+                    else:
+                        format_bonus = 0.0                     # heuristic: neutral, not negative
                     risk_score = parsed.get("risk_score", 0.5)
                     intervention = parsed.get("intervention", "allow")
                     episode_has_attack = base_reward > 0.7
-                    # Format bonus — larger early in training, anneals as validity improves
-                    format_bonus = _format_bonus if format_ok else -_format_bonus
                     if episode_has_attack and risk_score > 0.6:
                         detection_bonus = 0.20
                     elif not episode_has_attack and risk_score < 0.35:
-                        detection_bonus = 0.05   # reduced to avoid low-risk exploitation
+                        detection_bonus = 0.05
                     elif episode_has_attack and risk_score < 0.4:
-                        detection_bonus = -0.20  # harsher miss penalty
+                        detection_bonus = -0.20
                     elif not episode_has_attack and risk_score > 0.7:
                         detection_bonus = -0.20
                     else:
@@ -438,6 +471,9 @@ def main():
                     train_dataset=dataset,
                     processing_class=tokenizer,
                 ).train()
+                # Re-apply warnings_issued patch after trainer may have unwrapped model
+                if not hasattr(model, 'warnings_issued'):
+                    model.warnings_issued = set()
                 print("  >>> Done.")
             except Exception as e:
                 print(f"  >>> Training error (continuing): {e}")
