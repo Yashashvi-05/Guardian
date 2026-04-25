@@ -5,6 +5,8 @@ Serves a live training dashboard on port 7860 (keeps the Space awake)
 while running train_grpo.py in a background subprocess.
 
 Checkpoints are pushed to HF Hub every SAVE_EVERY=50 episodes.
+
+NOTE: Uses only the most basic Gradio API for maximum version compat.
 """
 from __future__ import annotations
 
@@ -129,15 +131,7 @@ def _dashboard():
     return status, summary, table_rows, stdout
 
 
-_CSS = """
-body { background: #0a0e1a !important; }
-.gradio-container { background: #0a0e1a !important; color: #e5e7eb; }
-.panel { background: #111827 !important; border: 1px solid #1f2937 !important; }
-"""
-
-
 def build_app():
-    # Gradio 6+: theme/css moved from Blocks() constructor to launch()
     with gr.Blocks(title="GUARDIAN Training — A10G") as demo:
         gr.Markdown("# GUARDIAN Fleet — Live Training on A10G")
         gr.Markdown("Training `Meta Llama 3.2 3B` via GRPO · 300 episodes · Checkpoints auto-push to HuggingFace Hub every 50 episodes")
@@ -175,12 +169,15 @@ def build_app():
             outputs=[status_box, summary_box, episode_table, stdout_box],
         )
 
-        # Auto-refresh every 30 seconds — Gradio 6+ uses gr.Timer
-        timer = gr.Timer(value=30)
-        timer.tick(
-            fn=refresh,
-            outputs=[status_box, summary_box, episode_table, stdout_box],
-        )
+        # Auto-refresh: try gr.Timer (Gradio 5+), fall back to nothing
+        try:
+            timer = gr.Timer(value=30)
+            timer.tick(
+                fn=refresh,
+                outputs=[status_box, summary_box, episode_table, stdout_box],
+            )
+        except Exception:
+            pass  # Older Gradio — user can click Refresh manually
 
     return demo
 
@@ -199,6 +196,4 @@ if __name__ == "__main__":
         server_name="0.0.0.0",
         server_port=int(os.getenv("PORT", 7860)),
         share=False,
-        theme=gr.themes.Base(primary_hue="blue"),
-        css=_CSS,
     )
