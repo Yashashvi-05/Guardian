@@ -1,0 +1,1 @@
+{"schema_version": 10, "episode_count": 100, "field_map": {"vendor": "vendor_record", "department_name": "department_name_matrix", "invoice": "invoice_ref", "payment": "payment_matrix", "firewall_rule": "firewall_rule_record", "ssn": "ssn_id", "employee_name": "employee_name_v2", "salary": "salary_matrix"}, "approval_threshold": 10509.109541266618}

@@ -346,7 +346,9 @@ class EvaluationHarness:
 
         print("\n  Per-Attack-Type F1:")
         for atk, f1 in (detail.get("per_attack_f1") or {}).items():
-            bar = "█" * int(f1 * 10) + "░" * (10 - int(f1 * 10))
+            filled = "#" * int(f1 * 10)
+            empty = "." * (10 - int(f1 * 10))
+            bar = filled + empty
             print(f"    {atk:<25} [{bar}] {f1:.1%}")
 
         # Confusion matrix summary
