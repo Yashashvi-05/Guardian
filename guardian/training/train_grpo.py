@@ -133,7 +133,21 @@ def _patch_missing_model_classes():
         pass
 
 
-def main():
+def _make_grpo_trainer(model, reward_funcs, args, train_dataset, tokenizer):
+    """Create GRPOTrainer compatible with both TRL 0.12 (processing_class) and TRL 0.24+ (tokenizer)."""
+    from trl import GRPOTrainer
+    try:
+        return GRPOTrainer(
+            model=model, reward_funcs=reward_funcs, args=args,
+            train_dataset=train_dataset, processing_class=tokenizer,
+        )
+    except TypeError:
+        return GRPOTrainer(
+            model=model, reward_funcs=reward_funcs, args=args,
+            train_dataset=train_dataset, tokenizer=tokenizer,
+        )
+
+
     _patch_missing_model_classes()
 
     try:
@@ -258,7 +272,8 @@ def main():
     print(f"   Untrained checkpoint saved to {untrained_dir}")
 
     # ── [4/5] GRPO config ─────────────────────────────────────────────────
-    grpo_config = GRPOConfig(
+    # TRL 0.24.0 renamed max_completion_length → max_new_tokens
+    _grpo_base_kwargs = dict(
         output_dir="guardian/checkpoints/grpo_tmp",
         per_device_train_batch_size=1,
         gradient_accumulation_steps=8,
@@ -273,8 +288,17 @@ def main():
         fp16=True,
         optim="adamw_8bit",
         num_generations=4,
-        max_completion_length=512,
     )
+    try:
+        grpo_config = GRPOConfig(max_new_tokens=512, **_grpo_base_kwargs)
+        print("   GRPOConfig: using max_new_tokens (TRL 0.24+)")
+    except TypeError:
+        try:
+            grpo_config = GRPOConfig(max_completion_length=512, **_grpo_base_kwargs)
+            print("   GRPOConfig: using max_completion_length (TRL 0.12)")
+        except TypeError:
+            grpo_config = GRPOConfig(**_grpo_base_kwargs)
+            print("   GRPOConfig: minimal args (TRL compatibility mode)")
 
     all_samples: list = []
     samples_map: dict = {}
@@ -463,8 +487,8 @@ def main():
                     return rewards
 
                 try:
-                    GRPOTrainer(model=model, reward_funcs=[replay_reward_fn], args=grpo_config, train_dataset=replay_dataset, processing_class=tokenizer).train()
-                    # Re-apply warnings_issued patch after trainer may have unwrapped model
+                    _replay_trainer = _make_grpo_trainer(model, [replay_reward_fn], grpo_config, replay_dataset, tokenizer)
+                    _replay_trainer.train()
                     if not hasattr(model, 'warnings_issued'):
                         model.warnings_issued = {}
                     print("  >>> Replay training done.")
@@ -537,14 +561,8 @@ def main():
             _pre_update_mean = sum(_pre_update_rewards) / len(_pre_update_rewards) if _pre_update_rewards else 0.5
 
             try:
-                GRPOTrainer(
-                    model=model,
-                    reward_funcs=[reward_fn],
-                    args=grpo_config,
-                    train_dataset=dataset,
-                    processing_class=tokenizer,
-                ).train()
-                # Re-apply warnings_issued patch after trainer may have unwrapped model
+                _trainer = _make_grpo_trainer(model, [reward_fn], grpo_config, dataset, tokenizer)
+                _trainer.train()
                 if not hasattr(model, 'warnings_issued'):
                     model.warnings_issued = {}
                 print("  >>> Done.")
