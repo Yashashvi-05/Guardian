@@ -3,9 +3,7 @@ title: GUARDIAN Security Framework
 emoji: 🛡️
 colorFrom: red
 colorTo: blue
-sdk: gradio
-sdk_version: "4.0.0"
-app_file: hf_app.py
+sdk: docker
 pinned: true
 ---
 
