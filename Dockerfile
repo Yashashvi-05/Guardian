@@ -13,19 +13,13 @@ RUN ln -sf /usr/bin/python3.11 /usr/bin/python3 \
 
 WORKDIR /app
 
-# PyTorch CUDA 12.1 wheels — pinned so nothing later can change the CUDA version
+# ── SINGLE pip command — lets pip resolve torch version for the actual hardware.
+# A10G uses CUDA 12.8 (cu128). We do NOT pin torch or torchvision:
+#   - unsloth picks its required torch (>=2.11.0) from cu128 index
+#   - torchvision is NOT installed — LLM text training doesn't need it
+#   - This prevents the "torchvision::nms does not exist" runtime crash
+ARG CACHE_BUST=2026-04-26-v5
 RUN pip install --no-cache-dir \
-    torch==2.3.0+cu121 \
-    torchvision==0.18.0+cu121 \
-    --extra-index-url https://download.pytorch.org/whl/cu121
-
-# ONE combined pip command so the resolver sees ALL constraints simultaneously.
-# transformers==4.51.3 is the MINIMUM version Unsloth 2026.4.8 accepts (>=4.51.3).
-# Combining with unsloth in the same command prevents pip from upgrading it.
-# _patch_missing_model_classes() in train_grpo.py handles BloomPreTrainedModel at runtime.
-ARG CACHE_BUST=2026-04-26-fix-transformers
-RUN pip install --no-cache-dir \
-    "transformers==4.51.3" \
     "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git" \
     "trl>=0.8.6" \
     "peft>=0.7.0" \
@@ -45,7 +39,8 @@ RUN pip install --no-cache-dir \
     "python-multipart>=0.0.9" \
     "httpx>=0.27.0" \
     "gradio>=4.0.0,<6.0.0" \
-    "openenv-core[cli]>=0.1.1"
+    "openenv-core[cli]>=0.1.1" \
+    --extra-index-url https://download.pytorch.org/whl/cu128
 
 COPY guardian/ ./guardian/
 COPY server/ ./server/

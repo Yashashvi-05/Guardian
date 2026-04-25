@@ -114,23 +114,44 @@ def _get_temperature(episode: int) -> float:
 
 
 def _patch_missing_model_classes():
-    """Patch model classes removed in transformers >= 4.50 that Unsloth expects."""
+    """
+    Patch model classes that Unsloth may expect.
+    IMPORTANT: Do NOT access transformers.BloomPreTrainedModel via attribute lookup —
+    transformers' lazy importer triggers modeling_bloom.py which imports torchvision,
+    which crashes if torchvision/torch versions don't match. Instead patch sys.modules
+    directly BEFORE any transformers import happens.
+    """
     try:
-        import transformers
-        # BloomPreTrainedModel was removed/reorganized in transformers >= 4.50
-        if not hasattr(transformers, "BloomPreTrainedModel"):
-            from transformers import PreTrainedModel
-            transformers.BloomPreTrainedModel = PreTrainedModel
-        # Also patch the modeling module if it exists
+        import sys
+        import types
+
+        # Pre-populate the bloom module in sys.modules so transformers' lazy importer
+        # never tries to load modeling_bloom.py (which imports torchvision at the top).
+        bloom_mod_name = "transformers.models.bloom.modeling_bloom"
+        if bloom_mod_name not in sys.modules:
+            fake_bloom = types.ModuleType(bloom_mod_name)
+            # Inject a dummy PreTrainedModel subclass so Unsloth's isinstance checks pass
+            try:
+                from transformers.modeling_utils import PreTrainedModel
+                fake_bloom.BloomPreTrainedModel = PreTrainedModel
+            except Exception:
+                fake_bloom.BloomPreTrainedModel = object
+            sys.modules[bloom_mod_name] = fake_bloom
+
+        # Also patch the top-level transformers namespace dict without triggering __getattr__
         try:
-            from transformers.models.bloom import modeling_bloom
-            if not hasattr(modeling_bloom, "BloomPreTrainedModel"):
-                from transformers import PreTrainedModel
-                modeling_bloom.BloomPreTrainedModel = PreTrainedModel
-        except (ImportError, AttributeError):
+            import transformers
+            if "BloomPreTrainedModel" not in transformers.__dict__:
+                try:
+                    from transformers.modeling_utils import PreTrainedModel
+                    transformers.__dict__["BloomPreTrainedModel"] = PreTrainedModel
+                except Exception:
+                    pass
+        except Exception:
             pass
-    except ImportError:
-        pass
+
+    except Exception:
+        pass  # Never let this patch function crash training
 
 
 def _make_grpo_trainer(model, reward_funcs, args, train_dataset, tokenizer):
