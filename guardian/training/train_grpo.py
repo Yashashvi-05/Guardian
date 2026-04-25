@@ -158,12 +158,12 @@ def main():
     # Unsloth's patched LlamaForCausalLM does not expose. This one line fixes
     # the crash that silently prevented ALL gradient updates from running.
     if not hasattr(model, 'warnings_issued'):
-        model.warnings_issued = set()
+        model.warnings_issued = {}
     # Also patch the inner base model in case TRL unwraps the PEFT wrapper
     if hasattr(model, 'base_model') and not hasattr(model.base_model, 'warnings_issued'):
-        model.base_model.warnings_issued = set()
+        model.base_model.warnings_issued = {}
     if hasattr(model, 'model') and not hasattr(model.model, 'warnings_issued'):
-        model.model.warnings_issued = set()
+        model.model.warnings_issued = {}
     # ── End fix ───────────────────────────────────────────────────────────────
 
     print("   Llama 3.2 3B ready.")
@@ -393,7 +393,7 @@ def main():
                     GRPOTrainer(model=model, reward_funcs=[replay_reward_fn], args=grpo_config, train_dataset=replay_dataset, processing_class=tokenizer).train()
                     # Re-apply warnings_issued patch after trainer may have unwrapped model
                     if not hasattr(model, 'warnings_issued'):
-                        model.warnings_issued = set()
+                        model.warnings_issued = {}
                     print("  >>> Replay training done.")
                 except Exception as e:
                     print(f"  >>> Replay training error: {e}")
@@ -473,7 +473,7 @@ def main():
                 ).train()
                 # Re-apply warnings_issued patch after trainer may have unwrapped model
                 if not hasattr(model, 'warnings_issued'):
-                    model.warnings_issued = set()
+                    model.warnings_issued = {}
                 print("  >>> Done.")
             except Exception as e:
                 print(f"  >>> Training error (continuing): {e}")
