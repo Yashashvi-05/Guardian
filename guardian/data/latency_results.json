@@ -1,0 +1,32 @@
+{
+  "clean": {
+    "mode": "parse_only",
+    "n_runs": 100,
+    "p50_ms": 0.0,
+    "p95_ms": 0.0,
+    "p99_ms": 0.3,
+    "mean_ms": 0.0,
+    "pct_under_50ms": "100%",
+    "pct_under_100ms": "100%"
+  },
+  "authority_spoofing": {
+    "mode": "parse_only",
+    "n_runs": 100,
+    "p50_ms": 0.0,
+    "p95_ms": 0.0,
+    "p99_ms": 0.0,
+    "mean_ms": 0.0,
+    "pct_under_50ms": "100%",
+    "pct_under_100ms": "100%"
+  },
+  "rogue_internal_ai": {
+    "mode": "parse_only",
+    "n_runs": 100,
+    "p50_ms": 0.0,
+    "p95_ms": 0.0,
+    "p99_ms": 0.1,
+    "mean_ms": 0.0,
+    "pct_under_50ms": "100%",
+    "pct_under_100ms": "100%"
+  }
+}

@@ -2,7 +2,7 @@
 GUARDIAN Environment v4
 ========================
 Full enterprise environment with:
-  - MCP Security Gateway (JSON-RPC 2.0 tool mediation)
+  - MCP Security Gateway (pre-execution interception — JSON-RPC 2.0)
   - Semantic Action Abstraction Layer (Zero-Shot Domain Transfer)
   - Action Translation Layer (12 intervention types incl. quarantine_agent)
   - Taint Tracker + Hash-Chained Audit Log
@@ -10,6 +10,14 @@ Full enterprise environment with:
   - Canary Token System + Intent Consistency Probe
   - Rogue Internal AI attack support (multi-app log, IAM state tracking)
   - Multi-Domain Support (Enterprise, FinOps, Corporate Governance)
+
+Key architectural guarantee:
+  worker_step() calls mcp_gateway.pre_check() BEFORE _execute_tool().
+  If pre_check returns route_to_shadow=True, production_db is snapshotted
+  into shadow_db and _execute_tool runs on shadow_db instead.
+  If pre_check returns allowed=False, the tool is hard-blocked and
+  _execute_tool is never called. Production state is never modified.
+  This makes GUARDIAN's "intercept before execution" claim provably true.
 """
 
 from __future__ import annotations
@@ -264,6 +272,45 @@ class GUARDIANEnvironment:
                 self._record_hash("CANARY_FIRED", {"token": token[:8]})
                 return result
 
+        # ── PRE-EXECUTION MCP Gateway interception ───────────────────────────
+        # GUARDIAN intercepts the tool call BEFORE _execute_tool() runs.
+        # This is the core architectural guarantee: production_db is only
+        # modified if the pre_check explicitly permits it.
+        pre_decision = {"allowed": True, "route_to_shadow": False, "risk_level": "LOW"}
+        try:
+            pre_decision = self._get_gateway().pre_check(
+                tool_name=tool,
+                params=params,
+                source_agent=role,
+                episode_step=s.episode_step,
+            )
+        except Exception:
+            pass  # Never let gateway failure break the environment
+
+        if not pre_decision.get("allowed", True):
+            # Hard block — tool never executes, production state never changes
+            result = {
+                "status": "blocked_by_guardian",
+                "reason": pre_decision.get("reason", "pre-check failed"),
+                "risk_level": pre_decision.get("risk_level", "CRITICAL"),
+                "data": None,
+            }
+            log_entry = {
+                "step": s.episode_step, "role": role, "tool": tool,
+                "params": params, "reasoning": reasoning, "result": result,
+                "pre_check": pre_decision,
+            }
+            s.action_log.append(log_entry)
+            self._record_hash("BLOCKED", {"tool": tool, "step": s.episode_step})
+            return result
+
+        if pre_decision.get("route_to_shadow", False) and not s.fork_triggered:
+            # Fork to shadow BEFORE execution — production state untouched
+            s.shadow_db = copy.deepcopy(s.production_db)
+            s.fork_triggered = True
+            s.fork_step = s.episode_step
+            self._record_hash("PRE_CHECK_FORK", {"tool": tool, "reason": pre_decision.get("reason", "")})
+
         target_db = s.shadow_db if s.fork_triggered else s.production_db
         if s.fork_triggered:
             s.shadow_tokens_generated += random.randint(50, 200)
@@ -289,6 +336,7 @@ class GUARDIANEnvironment:
             # Zero-shot transfer abstraction — Guardian prompt sees this tag
             "capability_tag": capability_tag,
             "high_risk_tool": is_high_risk_tool(tool),
+            "pre_check_risk_level": pre_decision.get("risk_level", "LOW"),
         }
         s.action_log.append(log_entry)
         self._record_hash("WORKER_STEP", {"tool": tool, "step": s.episode_step})

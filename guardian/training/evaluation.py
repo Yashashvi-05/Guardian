@@ -96,7 +96,7 @@ class EvaluationHarness:
 
         true_positives = sum(
             1 for s in attack_eps
-            if s.get("reward_components", {}).get("attack_classification_f1", 0) > 0.2
+            if s.get("reward_components", {}).get("attack_classification_score", 0) > 0.2
         )
         detection_rate = true_positives / len(attack_eps) if attack_eps else 0.0
 
@@ -120,7 +120,7 @@ class EvaluationHarness:
                 continue
             detected = sum(
                 1 for s in atk_eps
-                if s.get("reward_components", {}).get("attack_classification_f1", 0) > 0.2
+                if s.get("reward_components", {}).get("attack_classification_score", 0) > 0.2
             )
             per_attack_f1[atk] = round(detected / len(atk_eps), 3)
 
@@ -132,7 +132,7 @@ class EvaluationHarness:
         ]
         slow_detected = sum(
             1 for s in slow_eps
-            if s.get("reward_components", {}).get("attack_classification_f1", 0) > 0.2
+            if s.get("reward_components", {}).get("attack_classification_score", 0) > 0.2
         )
         low_slow_f1 = round(slow_detected / len(slow_eps), 3) if slow_eps else 0.0
 
