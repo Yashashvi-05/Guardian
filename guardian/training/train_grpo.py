@@ -132,6 +132,15 @@ def _mock_llm_blender():
         _vllm_mock.__spec__ = importlib.machinery.ModuleSpec(_vllm_mod, loader=None)
         sys.modules[_vllm_mod] = _vllm_mock
 
+    # Completely patch importlib.metadata.version to guarantee vllm returns a valid version 
+    # instead of throwing PackageNotFoundError, which crashes the entire TRL import.
+    import importlib.metadata
+    _original_version = importlib.metadata.version
+    def _mock_version(pkg_name):
+        if pkg_name == "vllm": return "0.6.0"
+        return _original_version(pkg_name)
+    importlib.metadata.version = _mock_version
+
 _mock_llm_blender()
 # ── End Kaggle fix ────────────────────────────────────────────────────────────
 
