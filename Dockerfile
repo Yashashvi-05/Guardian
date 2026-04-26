@@ -18,10 +18,10 @@ WORKDIR /app
 #   - unsloth picks its required torch (>=2.11.0) from cu128 index
 #   - torchvision is NOT installed — LLM text training doesn't need it
 #   - This prevents the "torchvision::nms does not exist" runtime crash
-ARG CACHE_BUST=2026-04-26-v7
+ARG CACHE_BUST=2026-04-26-v8
 RUN pip install --no-cache-dir \
     "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git" \
-    "trl>=0.8.6,<1.0.0" \
+    "trl==0.23.1" \
     "peft>=0.7.0" \
     "datasets>=3.4.1,<4.4.0" \
     "accelerate>=0.27.0" \
