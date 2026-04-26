@@ -119,7 +119,7 @@ def _mock_llm_blender():
 
     # Fix ALL vllm imports in TRL 0.23.1 by using MagicMock for everything vllm-related
     from unittest.mock import MagicMock
-    _vllm_mock = MagicMock()
+    import importlib.machinery
     for _vllm_mod in [
         "vllm", 
         "vllm.sampling_params",
@@ -128,6 +128,8 @@ def _mock_llm_blender():
         "vllm.distributed.device_communicators",
         "vllm.distributed.device_communicators.pynccl"
     ]:
+        _vllm_mock = MagicMock()
+        _vllm_mock.__spec__ = importlib.machinery.ModuleSpec(_vllm_mod, loader=None)
         sys.modules[_vllm_mod] = _vllm_mock
 
 _mock_llm_blender()
