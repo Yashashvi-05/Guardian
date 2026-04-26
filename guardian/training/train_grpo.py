@@ -124,6 +124,11 @@ def _mock_llm_blender():
     sys.modules["vllm.distributed.device_communicators.pynccl"].PyNcclCommunicator = _Stub  # type: ignore
     sys.modules["weave"].EvaluationLogger = _Stub  # type: ignore
 
+    # Bypass vllm_client unconditional import entirely
+    _trl_vllm = _make_fake("trl.extras.vllm_client")
+    _trl_vllm.VLLMClient = _Stub  # type: ignore
+    sys.modules["trl.extras.vllm_client"] = _trl_vllm
+
 _mock_llm_blender()
 # ── End Kaggle fix ────────────────────────────────────────────────────────────
 
