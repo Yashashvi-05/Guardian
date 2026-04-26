@@ -151,7 +151,7 @@ def _mock_llm_blender():
     _original_version = importlib.metadata.version
     def _mock_version(pkg_name):
         if pkg_name == "vllm": return "0.6.0"
-        if pkg_name == "torchvision": return "0.15.2"
+        if pkg_name == "torchvision": return "0.25.0"  # unsloth requires >=0.25.0
         return _original_version(pkg_name)
     importlib.metadata.version = _mock_version
 
