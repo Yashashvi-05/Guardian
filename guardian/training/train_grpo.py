@@ -40,6 +40,7 @@ sys.path.insert(0, ".")
 # which was removed in transformers >= 4.40. Mock the entire module tree before
 # TRL loads so the broken import never fires.
 def _mock_llm_blender():
+    import importlib.machinery
     for mod_name in [
         "llm_blender",
         "llm_blender.blender",
@@ -49,8 +50,11 @@ def _mock_llm_blender():
         "llm_blender.pair_ranker.pairrm_inference",
     ]:
         if mod_name not in sys.modules:
-            sys.modules[mod_name] = types.ModuleType(mod_name)
-    # Ensure the top-level Blender class exists (TRL may reference it)
+            mod = types.ModuleType(mod_name)
+            # importlib.util.find_spec() raises ValueError if __spec__ is None.
+            # Give every fake module a valid spec so TRL's _is_package_available() passes.
+            mod.__spec__ = importlib.machinery.ModuleSpec(mod_name, loader=None)
+            sys.modules[mod_name] = mod
     sys.modules["llm_blender"].Blender = None  # type: ignore
 
 _mock_llm_blender()
