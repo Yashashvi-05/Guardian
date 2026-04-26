@@ -114,9 +114,15 @@ def _mock_llm_blender():
         "liger_kernel", "liger_kernel.transformers",
         "ray", "ray.tune", "ray.air",
         "comet_ml", "neptune", "dvclive",
+        "vllm", "vllm.distributed", "vllm.distributed.device_communicators",
+        "vllm.distributed.device_communicators.pynccl",
     ]:
         if _n not in sys.modules:
             sys.modules[_n] = _make_fake(_n)
+
+    # Specific missing class stubs for TRL >= 0.23 / 1.x
+    sys.modules["vllm.distributed.device_communicators.pynccl"].PyNcclCommunicator = _Stub  # type: ignore
+    sys.modules["weave"].EvaluationLogger = _Stub  # type: ignore
 
 _mock_llm_blender()
 # ── End Kaggle fix ────────────────────────────────────────────────────────────
