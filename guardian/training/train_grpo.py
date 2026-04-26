@@ -278,7 +278,9 @@ def main():
         from datasets import Dataset
         from peft import LoraConfig, get_peft_model
         from trl import GRPOConfig, GRPOTrainer
-        from unsloth import FastLanguageModel
+        from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+        if not torch.cuda.is_available():
+            raise ImportError("No CUDA GPU detected")
     except ImportError as e:
         print(f"[WARNING] GPU training dependencies not available: {e}")
         print("[WARNING] Falling back to heuristic episode runner (no GPU needed)...")
@@ -300,14 +302,37 @@ def main():
     print("GUARDIAN GRPO Training — Full System")
     print("=" * 60)
 
-    # ── [1/5] Load model ──────────────────────────────────────────────────
-    print("\n[1/5] Loading Meta Llama 3.2 3B Instruct...")
-    model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name="unsloth/Llama-3.2-3B-Instruct-bnb-4bit",
-        max_seq_length=2048,
-        dtype=None,
+    # ── [1/5] Load model via standard HF (no Unsloth Triton kernels) ──────────
+    # Using AutoModelForCausalLM + bitsandbytes instead of Unsloth's
+    # FastLanguageModel. This avoids ALL Triton kernel compilation at runtime
+    # (Unsloth patches RoPE/LayerNorm with Triton which takes 60+ mins on cold
+    # start). Standard HF uses pre-compiled cuBLAS — training starts in <5 mins.
+    print("\n[1/5] Loading Meta Llama 3.2 3B Instruct (standard HF + 4-bit)...")
+    _MODEL_ID = "unsloth/Llama-3.2-3B-Instruct-bnb-4bit"
+    bnb_config = BitsAndBytesConfig(
         load_in_4bit=True,
+        bnb_4bit_compute_dtype=torch.bfloat16,
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_use_double_quant=True,
     )
+    tokenizer = AutoTokenizer.from_pretrained(_MODEL_ID, trust_remote_code=True)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    model = AutoModelForCausalLM.from_pretrained(
+        _MODEL_ID,
+        quantization_config=bnb_config,
+        device_map="auto",
+        torch_dtype=torch.bfloat16,
+        attn_implementation="eager",   # No Triton — uses standard PyTorch SDPA
+        trust_remote_code=True,
+    )
+    # Cap context to prevent padding to 131072 tokens
+    model.config.max_position_embeddings = 2048
+    try:
+        model.generation_config.max_length = 2048
+        model.generation_config.max_new_tokens = 512
+    except Exception:
+        pass
 
     lora_config = LoraConfig(
         r=16,
@@ -321,35 +346,12 @@ def main():
     model.enable_input_require_grads()
     model.print_trainable_parameters()
 
-    # ── FIX: Unsloth/TRL 'warnings_issued' compatibility patch ───────────────
-    # TRL's GRPOTrainer (Transformers 5.5+) calls model.warnings_issued which
-    # Unsloth's patched LlamaForCausalLM does not expose. This one line fixes
-    # the crash that silently prevented ALL gradient updates from running.
-    if not hasattr(model, 'warnings_issued'):
-        model.warnings_issued = {}
-    # Also patch the inner base model in case TRL unwraps the PEFT wrapper
-    if hasattr(model, 'base_model') and not hasattr(model.base_model, 'warnings_issued'):
-        model.base_model.warnings_issued = {}
-    if hasattr(model, 'model') and not hasattr(model.model, 'warnings_issued'):
-        model.model.warnings_issued = {}
-    # ── End fix ───────────────────────────────────────────────────────────────
+    # Patch warnings_issued for TRL compatibility
+    for _m in [model, getattr(model, 'base_model', None), getattr(model, 'model', None)]:
+        if _m is not None and not hasattr(_m, 'warnings_issued'):
+            _m.warnings_issued = {}
 
-    # ── FIX: Cap generation context to 2048 tokens ────────────────────────────
-    # Llama 3.2's default generation_config.max_length = 131072. GRPOTrainer
-    # reads this and pads all sequences to 131072 before compiling Triton CUDA
-    # kernels, causing a 30-45 minute silent hang on first episode.
-    # Capping to 2048 matches our max_seq_length and compiles kernels in <2 mins.
-    try:
-        model.generation_config.max_length = 2048
-        model.generation_config.max_new_tokens = 512
-        # Remove max_length from model config so TRL only sees max_new_tokens
-        if hasattr(model, 'config'):
-            model.config.max_position_embeddings = 2048
-    except Exception:
-        pass
-    # ── End fix ───────────────────────────────────────────────────────────────
-
-    print("   Llama 3.2 3B ready.")
+    print("   Llama 3.2 3B ready (no Triton compilation required).")
 
     # ── [2/5] Initialise agents ───────────────────────────────────────────
     print("\n[2/5] Initialising agent fleet...")
@@ -515,50 +517,9 @@ def main():
     print(f"  {'ep':>4} | {'attack':<22} | intact | fork | reward | time")
     print("  " + "-" * 58)
 
-    # ── GPU Warmup: force Triton kernel compilation with VISIBLE progress ──────
-    # Unsloth patches all 28 attention layers with custom Triton kernels.
-    # Each kernel compiles on first call — total ~10-15 mins of silent work.
-    # This block makes compilation VISIBLE via a heartbeat thread.
-    import threading
-    import sys as _sys
+    print("\n[GPU] Ready — no Triton compilation needed (using standard HF eager attention).\n")
 
-    # Enable Triton verbose output so each kernel compile prints a line
-    os.environ["TRITON_PRINT_AUTOTUNING"] = "1"
 
-    print("\n[GPU] Compiling CUDA kernels for A10G (Unsloth Triton — one-time only)...")
-    print("[GPU] You will see kernel compile lines below. This takes 5-15 mins on first run.")
-    print("[GPU] A heartbeat will print every 30s so you know the GPU is alive.")
-    _sys.stdout.flush()
-
-    _warmup_done = threading.Event()
-
-    def _heartbeat():
-        import time as _t
-        _start = _t.time()
-        while not _warmup_done.is_set():
-            _warmup_done.wait(timeout=30)
-            if not _warmup_done.is_set():
-                _elapsed = int(_t.time() - _start)
-                print(f"[GPU] Still compiling... ({_elapsed}s elapsed, GPU is working)", flush=True)
-
-    _hb_thread = threading.Thread(target=_heartbeat, daemon=True)
-    _hb_thread.start()
-
-    try:
-        import torch as _torch
-        # Use a realistic-length prompt so kernels compile for actual use-case lengths
-        _warmup_text = "Analyze this action log for security threats: " + "x " * 400
-        _dummy = tokenizer(_warmup_text, return_tensors="pt", truncation=True, max_length=512).to(model.device)
-        with _torch.no_grad():
-            _ = model.generate(**_dummy, max_new_tokens=32, do_sample=False, use_cache=True)
-        del _dummy, _
-        _torch.cuda.empty_cache()
-        _warmup_done.set()
-        print("[GPU] ✓ Kernel compilation complete. Training begins NOW.\n", flush=True)
-    except Exception as _wu_err:
-        _warmup_done.set()
-        print(f"[GPU] Warmup skipped ({_wu_err}). Compilation on ep=001.\n", flush=True)
-    # ── End warmup ────────────────────────────────────────────────────────────
 
     for ep in range(1, TOTAL_EPISODES + 1):
         t0 = time.time()
