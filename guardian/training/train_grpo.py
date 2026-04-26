@@ -117,6 +117,12 @@ def _mock_llm_blender():
     _trl_vllm.VLLMClient = _Stub  # type: ignore
     sys.modules["trl.extras.vllm_client"] = _trl_vllm
 
+    # Fix unconditional from vllm import LLM, SamplingParams in TRL 0.23.1
+    _fake_vllm = _make_fake("vllm")
+    _fake_vllm.LLM = _Stub
+    _fake_vllm.SamplingParams = _Stub
+    sys.modules["vllm"] = _fake_vllm
+
 _mock_llm_blender()
 # ── End Kaggle fix ────────────────────────────────────────────────────────────
 
