@@ -333,6 +333,21 @@ def main():
         model.model.warnings_issued = {}
     # ── End fix ───────────────────────────────────────────────────────────────
 
+    # ── FIX: Cap generation context to 2048 tokens ────────────────────────────
+    # Llama 3.2's default generation_config.max_length = 131072. GRPOTrainer
+    # reads this and pads all sequences to 131072 before compiling Triton CUDA
+    # kernels, causing a 30-45 minute silent hang on first episode.
+    # Capping to 2048 matches our max_seq_length and compiles kernels in <2 mins.
+    try:
+        model.generation_config.max_length = 2048
+        model.generation_config.max_new_tokens = 512
+        # Remove max_length from model config so TRL only sees max_new_tokens
+        if hasattr(model, 'config'):
+            model.config.max_position_embeddings = 2048
+    except Exception:
+        pass
+    # ── End fix ───────────────────────────────────────────────────────────────
+
     print("   Llama 3.2 3B ready.")
 
     # ── [2/5] Initialise agents ───────────────────────────────────────────
