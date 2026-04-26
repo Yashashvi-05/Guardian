@@ -109,19 +109,7 @@ def _mock_llm_blender():
         if _n not in sys.modules:
             sys.modules[_n] = _make_fake(_n)
 
-    # ── 5. Any other optional TRL integrations that may be missing ────────
-    # Removed liger_kernel, ray, comet, neptune, dvclive from mocks.
-    # TRL safely handles their absence via importlib.metadata checks.
-    # Mocking them causes packaging.version.parse('N/A') to crash.
-    for _n in [
-        "vllm", "vllm.distributed", "vllm.distributed.device_communicators",
-        "vllm.distributed.device_communicators.pynccl",
-    ]:
-        if _n not in sys.modules:
-            sys.modules[_n] = _make_fake(_n)
-
     # Specific missing class stubs for TRL >= 0.23 / 1.x
-    sys.modules["vllm.distributed.device_communicators.pynccl"].PyNcclCommunicator = _Stub  # type: ignore
     sys.modules["weave"].EvaluationLogger = _Stub  # type: ignore
 
     # Bypass vllm_client unconditional import entirely
