@@ -120,6 +120,7 @@ def _mock_llm_blender():
     # Fix ALL vllm imports in TRL 0.23.1 by using MagicMock for everything vllm-related
     from unittest.mock import MagicMock
     import importlib.machinery
+    import types
     for _vllm_mod in [
         "vllm", 
         "vllm.sampling_params",
@@ -133,10 +134,16 @@ def _mock_llm_blender():
         "torchvision.transforms.v2.functional",
         "torchvision.transforms.functional"
     ]:
-        _vllm_mock = MagicMock()
+        # To perfectly fake a package, we must use a real ModuleType, not a MagicMock object.
+        # MagicMock.__path__ behaves dynamically, causing importlib to fail the package check.
+        _vllm_mock = types.ModuleType(_vllm_mod)
         _vllm_mock.__spec__ = importlib.machinery.ModuleSpec(_vllm_mod, loader=None)
         _vllm_mock.__spec__.submodule_search_locations = ["/tmp"]  # Fix unsloth import_fixes crash
         _vllm_mock.__path__ = []  # Fix "is not a package" errors for nested imports
+        
+        # PEP 562: Return MagicMock for any attribute access inside the fake module
+        exec("def __getattr__(name):\n    from unittest.mock import MagicMock\n    return MagicMock()", _vllm_mock.__dict__)
+        
         sys.modules[_vllm_mod] = _vllm_mock
 
     # Completely patch importlib.metadata.version to guarantee vllm returns a valid version 
