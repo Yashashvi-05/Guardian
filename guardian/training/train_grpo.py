@@ -93,12 +93,30 @@ def _mock_llm_blender():
     sys.modules["mergekit.merge"].run_merge = _Stub()           # type: ignore
 
     # ── 3. Pre-inject trl.mergekit_utils so callbacks.py never hits mergekit ─
-    # TRL callbacks.py: from ..mergekit_utils import MergeConfig, merge_models, upload_model_to_hf
     _trl_mu = _make_fake("trl.mergekit_utils")
     _trl_mu.MergeConfig = _Stub        # type: ignore
     _trl_mu.merge_models = _Stub()     # type: ignore
     _trl_mu.upload_model_to_hf = _Stub()  # type: ignore
     sys.modules["trl.mergekit_utils"] = _trl_mu
+
+    # ── 4. weave (W&B tracing, optional TRL>=1.3 dependency) ─────────────
+    for _n in [
+        "weave", "weave.trace", "weave.trace.context",
+        "weave.trace.context.call_context",
+        "weave.trace.refs", "weave.trace.util",
+        "weave.client_context", "weave.client_context.weave_client",
+    ]:
+        if _n not in sys.modules:
+            sys.modules[_n] = _make_fake(_n)
+
+    # ── 5. Any other optional TRL integrations that may be missing ────────
+    for _n in [
+        "liger_kernel", "liger_kernel.transformers",
+        "ray", "ray.tune", "ray.air",
+        "comet_ml", "neptune", "dvclive",
+    ]:
+        if _n not in sys.modules:
+            sys.modules[_n] = _make_fake(_n)
 
 _mock_llm_blender()
 # ── End Kaggle fix ────────────────────────────────────────────────────────────
