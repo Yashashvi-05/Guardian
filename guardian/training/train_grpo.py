@@ -117,11 +117,18 @@ def _mock_llm_blender():
     _trl_vllm.VLLMClient = _Stub  # type: ignore
     sys.modules["trl.extras.vllm_client"] = _trl_vllm
 
-    # Fix unconditional from vllm import LLM, SamplingParams in TRL 0.23.1
-    _fake_vllm = _make_fake("vllm")
-    _fake_vllm.LLM = _Stub
-    _fake_vllm.SamplingParams = _Stub
-    sys.modules["vllm"] = _fake_vllm
+    # Fix ALL vllm imports in TRL 0.23.1 by using MagicMock for everything vllm-related
+    from unittest.mock import MagicMock
+    _vllm_mock = MagicMock()
+    for _vllm_mod in [
+        "vllm", 
+        "vllm.sampling_params",
+        "vllm.distributed",
+        "vllm.distributed.utils",
+        "vllm.distributed.device_communicators",
+        "vllm.distributed.device_communicators.pynccl"
+    ]:
+        sys.modules[_vllm_mod] = _vllm_mock
 
 _mock_llm_blender()
 # ── End Kaggle fix ────────────────────────────────────────────────────────────
