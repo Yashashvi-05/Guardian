@@ -41,6 +41,13 @@ sys.path.insert(0, ".")
 # TRL loads so the broken import never fires.
 def _mock_llm_blender():
     import importlib.machinery
+
+    def _make_fake(name: str):
+        mod = types.ModuleType(name)
+        mod.__spec__ = importlib.machinery.ModuleSpec(name, loader=None)
+        return mod
+
+    # ── llm_blender (removed from transformers >= 4.40) ──────────────────
     for mod_name in [
         "llm_blender",
         "llm_blender.blender",
@@ -50,12 +57,28 @@ def _mock_llm_blender():
         "llm_blender.pair_ranker.pairrm_inference",
     ]:
         if mod_name not in sys.modules:
-            mod = types.ModuleType(mod_name)
-            # importlib.util.find_spec() raises ValueError if __spec__ is None.
-            # Give every fake module a valid spec so TRL's _is_package_available() passes.
-            mod.__spec__ = importlib.machinery.ModuleSpec(mod_name, loader=None)
-            sys.modules[mod_name] = mod
+            sys.modules[mod_name] = _make_fake(mod_name)
     sys.modules["llm_blender"].Blender = None  # type: ignore
+
+    # ── mergekit (required by TRL >= 1.2.0 for model-merge utilities) ────
+    # We don't use model merging — mock the entire package so TRL imports cleanly.
+    for mod_name in [
+        "mergekit",
+        "mergekit.config",
+        "mergekit.merge",
+        "mergekit.plan",
+        "mergekit.options",
+        "mergekit.io",
+        "mergekit.io.tasks",
+    ]:
+        if mod_name not in sys.modules:
+            sys.modules[mod_name] = _make_fake(mod_name)
+
+    # TRL does: from mergekit.config import MergeConfiguration
+    class _FakeMergeConfig:
+        def __init__(self, *a, **kw): pass
+    sys.modules["mergekit.config"].MergeConfiguration = _FakeMergeConfig  # type: ignore
+    sys.modules["mergekit.config"].MergeConfig = _FakeMergeConfig  # type: ignore
 
 _mock_llm_blender()
 # ── End Kaggle fix ────────────────────────────────────────────────────────────
