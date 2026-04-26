@@ -110,10 +110,10 @@ def _mock_llm_blender():
             sys.modules[_n] = _make_fake(_n)
 
     # ── 5. Any other optional TRL integrations that may be missing ────────
+    # Removed liger_kernel, ray, comet, neptune, dvclive from mocks.
+    # TRL safely handles their absence via importlib.metadata checks.
+    # Mocking them causes packaging.version.parse('N/A') to crash.
     for _n in [
-        "liger_kernel", "liger_kernel.transformers",
-        "ray", "ray.tune", "ray.air",
-        "comet_ml", "neptune", "dvclive",
         "vllm", "vllm.distributed", "vllm.distributed.device_communicators",
         "vllm.distributed.device_communicators.pynccl",
     ]:
