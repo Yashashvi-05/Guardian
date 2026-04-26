@@ -411,6 +411,9 @@ def main():
         fp16=True,
         optim="adamw_8bit",
         num_generations=4,
+        # Cap context window so Triton compiles 2048-token kernels (not 131072).
+        # Guardian prompts are <1000 tokens — this wastes nothing.
+        max_prompt_length=1536,
     )
     try:
         grpo_config = GRPOConfig(max_new_tokens=512, **_grpo_base_kwargs)
