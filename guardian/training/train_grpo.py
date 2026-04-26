@@ -40,6 +40,20 @@ sys.path.insert(0, ".")
 # which was removed in transformers >= 4.40. Mock the entire module tree before
 # TRL loads so the broken import never fires.
 def _mock_llm_blender():
+    """
+    Pre-inject fake modules into sys.modules so broken optional TRL dependencies
+    never cause ImportError. Runs before any TRL/transformers import.
+
+    Mocked packages:
+      llm_blender — removed from transformers>=4.40, TRL still checks for it
+      mergekit    — required by TRL>=1.2.0 for model merging; we only use GRPO
+
+    Source-read from TRL 1.2.0 mergekit_utils.py:
+      from mergekit.config import MergeConfiguration
+      from mergekit.merge import MergeOptions, run_merge
+    Source-read from TRL callbacks.py:
+      from ..mergekit_utils import MergeConfig, merge_models, upload_model_to_hf
+    """
     import importlib.machinery
 
     def _make_fake(name: str):
@@ -47,38 +61,44 @@ def _mock_llm_blender():
         mod.__spec__ = importlib.machinery.ModuleSpec(name, loader=None)
         return mod
 
-    # ── llm_blender (removed from transformers >= 4.40) ──────────────────
-    for mod_name in [
-        "llm_blender",
-        "llm_blender.blender",
-        "llm_blender.blender.blender",
-        "llm_blender.blender.blender_utils",
-        "llm_blender.pair_ranker",
+    class _Stub:
+        """Generic stub — works as a class, callable, or attribute value."""
+        def __init__(self, *a, **kw): pass
+        def __call__(self, *a, **kw): return None
+
+    # ── 1. llm_blender ───────────────────────────────────────────────────
+    for _n in [
+        "llm_blender", "llm_blender.blender", "llm_blender.blender.blender",
+        "llm_blender.blender.blender_utils", "llm_blender.pair_ranker",
         "llm_blender.pair_ranker.pairrm_inference",
     ]:
-        if mod_name not in sys.modules:
-            sys.modules[mod_name] = _make_fake(mod_name)
+        if _n not in sys.modules:
+            sys.modules[_n] = _make_fake(_n)
     sys.modules["llm_blender"].Blender = None  # type: ignore
 
-    # ── mergekit (required by TRL >= 1.2.0 for model-merge utilities) ────
-    # We don't use model merging — mock the entire package so TRL imports cleanly.
-    for mod_name in [
-        "mergekit",
-        "mergekit.config",
-        "mergekit.merge",
-        "mergekit.plan",
-        "mergekit.options",
-        "mergekit.io",
-        "mergekit.io.tasks",
+    # ── 2. mergekit submodules ────────────────────────────────────────────
+    for _n in [
+        "mergekit", "mergekit.config", "mergekit.merge",
+        "mergekit.plan", "mergekit.options", "mergekit.io",
+        "mergekit.io.tasks", "mergekit.common", "mergekit.architecture",
     ]:
-        if mod_name not in sys.modules:
-            sys.modules[mod_name] = _make_fake(mod_name)
+        if _n not in sys.modules:
+            sys.modules[_n] = _make_fake(_n)
 
-    # TRL does: from mergekit.config import MergeConfiguration
-    class _FakeMergeConfig:
-        def __init__(self, *a, **kw): pass
-    sys.modules["mergekit.config"].MergeConfiguration = _FakeMergeConfig  # type: ignore
-    sys.modules["mergekit.config"].MergeConfig = _FakeMergeConfig  # type: ignore
+    # Exact symbols TRL mergekit_utils.py imports (source-verified):
+    #   from mergekit.config import MergeConfiguration
+    #   from mergekit.merge  import MergeOptions, run_merge
+    sys.modules["mergekit.config"].MergeConfiguration = _Stub  # type: ignore
+    sys.modules["mergekit.merge"].MergeOptions = _Stub          # type: ignore
+    sys.modules["mergekit.merge"].run_merge = _Stub()           # type: ignore
+
+    # ── 3. Pre-inject trl.mergekit_utils so callbacks.py never hits mergekit ─
+    # TRL callbacks.py: from ..mergekit_utils import MergeConfig, merge_models, upload_model_to_hf
+    _trl_mu = _make_fake("trl.mergekit_utils")
+    _trl_mu.MergeConfig = _Stub        # type: ignore
+    _trl_mu.merge_models = _Stub()     # type: ignore
+    _trl_mu.upload_model_to_hf = _Stub()  # type: ignore
+    sys.modules["trl.mergekit_utils"] = _trl_mu
 
 _mock_llm_blender()
 # ── End Kaggle fix ────────────────────────────────────────────────────────────
