@@ -129,11 +129,14 @@ def _mock_llm_blender():
         "vllm.distributed.device_communicators.pynccl",
         "torchvision",
         "torchvision.transforms",
+        "torchvision.transforms.v2",
+        "torchvision.transforms.v2.functional",
         "torchvision.transforms.functional"
     ]:
         _vllm_mock = MagicMock()
         _vllm_mock.__spec__ = importlib.machinery.ModuleSpec(_vllm_mod, loader=None)
         _vllm_mock.__spec__.submodule_search_locations = ["/tmp"]  # Fix unsloth import_fixes crash
+        _vllm_mock.__path__ = []  # Fix "is not a package" errors for nested imports
         sys.modules[_vllm_mod] = _vllm_mock
 
     # Completely patch importlib.metadata.version to guarantee vllm returns a valid version 
