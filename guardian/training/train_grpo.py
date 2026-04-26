@@ -120,7 +120,6 @@ def _mock_llm_blender():
     # Fix ALL vllm imports in TRL 0.23.1 by using MagicMock for everything vllm-related
     from unittest.mock import MagicMock
     import importlib.machinery
-    import types
     for _vllm_mod in [
         "vllm", 
         "vllm.sampling_params",
