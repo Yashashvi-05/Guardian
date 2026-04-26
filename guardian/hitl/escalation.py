@@ -169,7 +169,7 @@ class HITLManager:
         self._pending[ctx.context_id] = ctx
 
         # Fire n8n webhook (Telegram alert)
-        n8n_url = os.getenv("N8N_WEBHOOK_URL", "http://localhost:5678/webhook-test/guardian-alert")
+        n8n_url = os.getenv("N8N_WEBHOOK_URL", "http://localhost:5678/webhook/guardian-alert")
         try:
             requests.post(n8n_url, json=asdict(ctx), timeout=2)
         except Exception as e:

@@ -1,0 +1,6 @@
+RECEIVED DECISION: manual-test -> shadow
+RECEIVED DECISION: " + $json.context_id -> ="block
+RECEIVED DECISION: " + $json.context_id -> ="allow
+RECEIVED DECISION: " + $json.context_id -> ="allow
+RECEIVED DECISION: " + $json.context_id -> ="allow
+RECEIVED DECISION: " + $json.context_id -> ="allow

@@ -58,9 +58,12 @@ def get_pending_escalations():
 def post_human_decision(payload: DecisionPayload):
     """
     Receives a human decision from n8n (Telegram callback).
-    Resolves the pending escalation and unblocks the episode runner.
+    Always returns 200 so n8n proceeds to send the Telegram confirmation.
+    If context_id is not in memory (server restarted), logs a headless entry.
     """
     manager = get_hitl_manager()
+    with open("decision_log.txt", "a") as f:
+        f.write(f"RECEIVED DECISION: {payload.context_id} -> {payload.decision}\n")
 
     if payload.decision not in VALID_DECISIONS:
         raise HTTPException(
@@ -69,17 +72,13 @@ def post_human_decision(payload: DecisionPayload):
         )
 
     resolved = manager.resolve(payload.context_id, payload.decision)
-    if not resolved:
-        raise HTTPException(
-            status_code=404,
-            detail=f"context_id '{payload.context_id}' not found or already resolved."
-        )
-
+    # Always return 200 — even if context was not in memory (headless entry written)
     return {
         "ok": True,
         "context_id": payload.context_id,
         "decision": payload.decision,
-        "message": f"Decision '{payload.decision}' applied to escalation {payload.context_id}.",
+        "message": f"Decision '{payload.decision}' recorded for escalation {payload.context_id}.",
+        "was_pending": resolved is not None,
     }
 
 

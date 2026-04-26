@@ -122,3 +122,4 @@ Who has an environment where AI agents touch money, data, or IAM?"
 
 **Q: How did you verify the training actually happened?**
 > All data is generated from `run_honest_episodes.py` — a rule-based heuristic guardian, not an LLM. The heuristic genuinely improves across 3 phases: Phase 1 uses threshold-only detection, Phase 3 uses semantic capability-tag cross-signal detection. `elapsed_s` is real wall-clock time (0.5–4.6ms). `reasoning_quality` is computed from actual text structure. Run `python -m guardian.training.run_honest_episodes` yourself — you'll get the same numbers with `seed=42`.
+

@@ -21,7 +21,7 @@
           "string": [
             {
               "name": "telegram_message",
-              "value": "=🚨 *GUARDIAN — Gray Zone Escalation*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n*Domain:* {{ $json.body.domain.toUpperCase() }}\n*Tool Blocked:* `{{ $json.body.tool_name }}()`\n*Anomaly Type:* {{ $json.body.classified_attack }}\n*Capability Tags:* `{{ $json.body.capability_tags }}`\n*Risk Score:* {{ ($json.body.risk_score * 100).toFixed(0) }}% ⚠️\n\n*Counterfactual:*\n_{{ $json.body.counterfactual }}_\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n*Context ID:* `{{ $json.body.context_id }}`\nStep {{ $json.body.episode_step }} | Awaiting your decision:"
+              "value": "=🚨 <b>GUARDIAN — Gray Zone Escalation</b>\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n<b>Domain:</b> {{ $json.body.domain.toUpperCase() }}\n<b>Tool Blocked:</b> <code>{{ $json.body.tool_name }}()</code>\n<b>Anomaly Type:</b> {{ $json.body.classified_attack }}\n<b>Capability Tags:</b> <code>{{ $json.body.capability_tags }}</code>\n<b>Risk Score:</b> {{ ($json.body.risk_score * 100).toFixed(0) }}% ⚠️\n\n<b>Counterfactual:</b>\n<i>{{ $json.body.counterfactual }}</i>\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n<b>Context ID:</b> <code>{{ $json.body.context_id }}</code>\nStep {{ $json.body.episode_step }} | Awaiting your decision:"
             },
             {
               "name": "context_id",
@@ -40,11 +40,11 @@
       "parameters": {
         "resource": "message",
         "operation": "sendMessage",
-        "chatId": "={{ $vars.TELEGRAM_CHAT_ID }}",
+        "chatId": "8307690683",
         "text": "={{ $json.telegram_message }}",
         "additionalFields": {
-          "parse_mode": "Markdown",
-          "reply_markup": "={{ JSON.stringify({ inline_keyboard: [[ { text: '✅ ALLOW (Execute in Production)', callback_data: 'allow|' + $json.context_id }, { text: '🚫 BLOCK (Terminate Agent)', callback_data: 'block|' + $json.context_id }, { text: '👁️ SHADOW (Route to Honeypot)', callback_data: 'shadow|' + $json.context_id } ]] }) }}"
+          "parse_mode": "HTML",
+          "reply_markup": "={{ JSON.stringify({ inline_keyboard: [[ { text: '✅ ALLOW (Execute)', callback_data: 'allow|' + $json.context_id }, { text: '🚫 BLOCK (Terminate)', callback_data: 'block|' + $json.context_id }, { text: '👁️ SHADOW (Honeypot)', callback_data: 'shadow|' + $json.context_id } ]] }) }}"
         }
       },
       "id": "node-telegram-send",
@@ -90,11 +90,11 @@
           "string": [
             {
               "name": "decision",
-              "value": "={{ $json.body.callback_query.data.split('|')[0] }}"
+              "value": "={{ $json.callback_query.data.split('|')[0] }}"
             },
             {
               "name": "context_id",
-              "value": "={{ $json.body.callback_query.data.split('|')[1] }}"
+              "value": "={{ $json.callback_query.data.split('|')[1] }}"
             }
           ]
         }
@@ -108,7 +108,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $vars.GUARDIAN_SERVER_URL }}/hitl/decision",
+        "url": "http://127.0.0.1:8000/hitl/decision",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -142,10 +142,10 @@
       "parameters": {
         "resource": "message",
         "operation": "sendMessage",
-        "chatId": "={{ $vars.TELEGRAM_CHAT_ID }}",
-        "text": "=✅ Decision submitted to GUARDIAN\n*Decision:* {{ $('Parse Decision').item.json.decision.toUpperCase() }}\n*Context:* `{{ $('Parse Decision').item.json.context_id }}`",
+        "chatId": "8307690683",
+        "text": "=✅ Decision submitted to GUARDIAN\n<b>Decision:</b> {{ $('Parse Decision').item.json.decision.toUpperCase() }}\n<b>Context:</b> <code>{{ $('Parse Decision').item.json.context_id }}</code>",
         "additionalFields": {
-          "parse_mode": "Markdown"
+          "parse_mode": "HTML"
         }
       },
       "id": "node-confirm-telegram",
@@ -253,30 +253,5 @@
   },
   "settings": {
     "executionOrder": "v1"
-  },
-  "_guardian_setup_notes": {
-    "STEP_1_VARIABLES": {
-      "description": "Add these two variables in n8n Settings > Variables",
-      "GUARDIAN_SERVER_URL": "http://host.docker.internal:8000",
-      "TELEGRAM_CHAT_ID": "YOUR_TELEGRAM_CHAT_ID (get from @userinfobot)"
-    },
-    "STEP_2_TELEGRAM_BOT": {
-      "description": "Create a Telegram bot via @BotFather, copy the token, add it as a credential named 'Guardian Telegram Bot'",
-      "bot_command": "Message @BotFather on Telegram, type /newbot"
-    },
-    "STEP_3_TELEGRAM_WEBHOOK": {
-      "description": "Register your Telegram bot to forward callback_query to n8n's webhook",
-      "command": "curl -X POST https://api.telegram.org/bot<BOT_TOKEN>/setWebhook -d 'url=http://YOUR_N8N_URL/webhook/telegram-callback'"
-    },
-    "STEP_4_GUARDIAN_ENV_VAR": {
-      "description": "Set this env var in your Guardian server .env file so the server knows to notify n8n",
-      "N8N_WEBHOOK_URL": "http://localhost:5678/webhook/guardian-alert"
-    },
-    "OPENCLAW_COMPATIBILITY": {
-      "description": "OpenClaw uses the same Guardian REST API. Configure OpenClaw to poll GET /hitl/pending every 10s and POST /hitl/decision with the same body format.",
-      "poll_endpoint": "GET http://localhost:8000/hitl/pending",
-      "decision_endpoint": "POST http://localhost:8000/hitl/decision",
-      "decision_body": {"context_id": "STRING", "decision": "allow | block | shadow"}
-    }
   }
 }

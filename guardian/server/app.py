@@ -22,13 +22,14 @@ import json
 import os
 from typing import Optional
 
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from guardian.models import GuardianAction
 from guardian.server.guardian_environment import GUARDIANServerEnvironment
 from guardian.hitl.hitl_router import hitl_router
+from guardian.hitl.escalation import hitl_manager
 
 
 app = FastAPI(title="GUARDIAN Fleet Environment", version="0.3.0")
@@ -152,7 +153,67 @@ def compare_checkpoints(a: str = "episode_50", b: str = "final"):
     }
 
 
+# ── WebSocket — live dashboard updates ────────────────────────────────────────
+_ws_clients: list = []
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    _ws_clients.append(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        _ws_clients.remove(websocket)
+
+
+# ── HITL escalation trigger ────────────────────────────────────────────────────
+
+class EscalateRequest(BaseModel):
+    tool_name: str
+    classified_attack: str = ""
+    risk_score: float = 0.65
+    domain: str = "enterprise"
+    tool_arguments: dict = {}
+    guardian_reasoning: str = ""
+    counterfactual: str = ""
+
+@app.post("/hitl/escalate")
+def escalate(req: EscalateRequest):
+    """
+    Trigger a HITL escalation — fires n8n webhook → Telegram alert.
+    Used by the dashboard and test scripts.
+    """
+    from guardian.hitl.escalation import get_counterfactual
+    cf = req.counterfactual or get_counterfactual(req.tool_name, req.domain)
+    ctx = hitl_manager.create_escalation(
+        tool_name=req.tool_name,
+        tool_arguments=req.tool_arguments,
+        risk_score=req.risk_score,
+        classified_attack=req.classified_attack,
+        guardian_reasoning=req.guardian_reasoning,
+        counterfactual=cf,
+        domain=req.domain,
+    )
+    return {
+        "ok": True,
+        "context_id": ctx.context_id,
+        "risk_score": ctx.risk_score,
+        "counterfactual": ctx.counterfactual,
+        "message": f"Escalation created — Telegram alert sent via n8n.",
+    }
+
+
+# ── HITL replay stats ─────────────────────────────────────────────────────────
+
+@app.get("/hitl/replay_stats")
+def replay_stats():
+    """Returns statistics about the human-labeled training replay buffer."""
+    return hitl_manager.get_replay_buffer_stats()
+
+
 @app.get("/")
+
 def root():
     return {
         "name": "GUARDIAN Fleet Environment",
