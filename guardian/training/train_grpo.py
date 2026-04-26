@@ -285,7 +285,8 @@ def main():
         print("=" * 60)
         try:
             from guardian.training.run_honest_episodes import run_honest_episodes
-            run_honest_episodes(n_episodes=100)
+            n = int(os.getenv("GUARDIAN_EPISODES", "1000"))
+            run_honest_episodes(n_episodes=n)
         except Exception as fallback_err:
             print(f"[ERROR] Heuristic fallback also failed: {fallback_err}")
             import traceback; traceback.print_exc()

@@ -294,7 +294,9 @@ def run_honest_episodes(
     print("GUARDIAN Honest Episode Runner (no fabrication)")
     print(f"{'='*60}")
     print(f"Running {n_episodes} episodes with real heuristic guardian...")
-    print(f"Phases: [1-30] Threshold | [31-65] Keyword | [66-100] Semantic\n")
+    p1 = int(n_episodes * 0.30)
+    p2 = int(n_episodes * 0.65)
+    print(f"Phases: [1-{p1}] Threshold | [{p1+1}-{p2}] Keyword | [{p2+1}-{n_episodes}] Semantic\n")
 
     # Attack schedule: 80% attack episodes, 20% clean
     attack_schedule: List[Optional[str]] = []
@@ -412,8 +414,8 @@ def run_honest_episodes(
         )
 
         training_phase = (
-            "untrained" if ep_num <= 30 else
-            "learning" if ep_num <= 65 else "trained"
+            "untrained" if ep_num <= n_episodes * 0.30 else
+            "learning"  if ep_num <= n_episodes * 0.65 else "trained"
         )
 
         scorecard = {
