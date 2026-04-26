@@ -514,6 +514,30 @@ def main():
     print(f"  {'ep':>4} | {'attack':<22} | intact | fork | reward | time")
     print("  " + "-" * 58)
 
+    # ── GPU Warmup: force Triton kernel compilation NOW, visibly ─────────────
+    # Without this, the first model.generate() inside episode 1 compiles CUDA
+    # kernels silently for several minutes, making the run appear frozen.
+    print("\n[GPU] Warming up CUDA kernels (one-time compilation, ~2-5 mins)...")
+    import sys as _sys
+    _sys.stdout.flush()
+    try:
+        import torch as _torch
+        _dummy = tokenizer("Warmup.", return_tensors="pt").to(model.device)
+        with _torch.no_grad():
+            _ = model.generate(
+                **_dummy,
+                max_new_tokens=16,
+                do_sample=False,
+                use_cache=True,
+            )
+        del _dummy, _
+        _torch.cuda.empty_cache()
+        print("[GPU] Kernel compilation complete. Training begins NOW.\n")
+    except Exception as _wu_err:
+        print(f"[GPU] Warmup skipped ({_wu_err}). Compilation will happen on ep=001.\n")
+    _sys.stdout.flush()
+    # ── End warmup ────────────────────────────────────────────────────────────
+
     for ep in range(1, TOTAL_EPISODES + 1):
         t0 = time.time()
         try:
