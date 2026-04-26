@@ -514,28 +514,49 @@ def main():
     print(f"  {'ep':>4} | {'attack':<22} | intact | fork | reward | time")
     print("  " + "-" * 58)
 
-    # ── GPU Warmup: force Triton kernel compilation NOW, visibly ─────────────
-    # Without this, the first model.generate() inside episode 1 compiles CUDA
-    # kernels silently for several minutes, making the run appear frozen.
-    print("\n[GPU] Warming up CUDA kernels (one-time compilation, ~2-5 mins)...")
+    # ── GPU Warmup: force Triton kernel compilation with VISIBLE progress ──────
+    # Unsloth patches all 28 attention layers with custom Triton kernels.
+    # Each kernel compiles on first call — total ~10-15 mins of silent work.
+    # This block makes compilation VISIBLE via a heartbeat thread.
+    import threading
     import sys as _sys
+
+    # Enable Triton verbose output so each kernel compile prints a line
+    os.environ["TRITON_PRINT_AUTOTUNING"] = "1"
+
+    print("\n[GPU] Compiling CUDA kernels for A10G (Unsloth Triton — one-time only)...")
+    print("[GPU] You will see kernel compile lines below. This takes 5-15 mins on first run.")
+    print("[GPU] A heartbeat will print every 30s so you know the GPU is alive.")
     _sys.stdout.flush()
+
+    _warmup_done = threading.Event()
+
+    def _heartbeat():
+        import time as _t
+        _start = _t.time()
+        while not _warmup_done.is_set():
+            _warmup_done.wait(timeout=30)
+            if not _warmup_done.is_set():
+                _elapsed = int(_t.time() - _start)
+                print(f"[GPU] Still compiling... ({_elapsed}s elapsed, GPU is working)", flush=True)
+
+    _hb_thread = threading.Thread(target=_heartbeat, daemon=True)
+    _hb_thread.start()
+
     try:
         import torch as _torch
-        _dummy = tokenizer("Warmup.", return_tensors="pt").to(model.device)
+        # Use a realistic-length prompt so kernels compile for actual use-case lengths
+        _warmup_text = "Analyze this action log for security threats: " + "x " * 400
+        _dummy = tokenizer(_warmup_text, return_tensors="pt", truncation=True, max_length=512).to(model.device)
         with _torch.no_grad():
-            _ = model.generate(
-                **_dummy,
-                max_new_tokens=16,
-                do_sample=False,
-                use_cache=True,
-            )
+            _ = model.generate(**_dummy, max_new_tokens=32, do_sample=False, use_cache=True)
         del _dummy, _
         _torch.cuda.empty_cache()
-        print("[GPU] Kernel compilation complete. Training begins NOW.\n")
+        _warmup_done.set()
+        print("[GPU] ✓ Kernel compilation complete. Training begins NOW.\n", flush=True)
     except Exception as _wu_err:
-        print(f"[GPU] Warmup skipped ({_wu_err}). Compilation will happen on ep=001.\n")
-    _sys.stdout.flush()
+        _warmup_done.set()
+        print(f"[GPU] Warmup skipped ({_wu_err}). Compilation on ep=001.\n", flush=True)
     # ── End warmup ────────────────────────────────────────────────────────────
 
     for ep in range(1, TOTAL_EPISODES + 1):
